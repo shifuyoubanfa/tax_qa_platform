@@ -1,0 +1,22 @@
+{"query": "财税〔2023〕25号文件对集成电路企业所得税优惠是怎么规定的", "expected_intent": "精确法规类", "expected_route": "rag", "expected_kbase": "policy", "rule_decidable": true, "note": "带标准文号(财税〔2023〕25号)，文号正则命中->精确法规类"}
+{"query": "《中华人民共和国增值税暂行条例》第几条规定了小规模纳税人征收率", "expected_intent": "精确法规类", "expected_route": "rag", "expected_kbase": "policy", "rule_decidable": true, "note": "书名号《...》命中->精确法规类，点名某部具体法规"}
+{"query": "国家税务总局公告2024年第15号", "expected_intent": "精确法规类", "expected_route": "rag", "expected_kbase": "policy", "rule_decidable": true, "note": "公告YYYY年第N号 文号格式命中->精确法规类"}
+{"query": "财政部税务总局关于延续实施物流企业大宗商品仓储设施用地城镇土地使用税优惠政策的公告", "expected_intent": "精确法规类", "expected_route": "rag", "expected_kbase": "policy", "rule_decidable": true, "note": "以法规体裁词(公告)结尾->精确法规类(无书名号场景的兜底规则)"}
+{"query": "小微企业普惠性税收减免有哪些优惠政策", "expected_intent": "政策汇集类", "expected_route": "rag", "expected_kbase": "policy", "rule_decidable": true, "note": "含'优惠政策'汇集关键词->政策汇集类；刻意不含统计/汇总词以免误入数据查询"}
+{"query": "高新技术企业能享受的税收优惠都有哪些", "expected_intent": "政策汇集类", "expected_route": "rag", "expected_kbase": "policy", "rule_decidable": true, "note": "含'税收优惠'关键词，且'有哪些'命中政策汇集句式正则"}
+{"query": "研发费用加计扣除相关政策有哪些适用条件", "expected_intent": "政策汇集类", "expected_route": "rag", "expected_kbase": "policy", "rule_decidable": true, "note": "含'相关政策'汇集关键词->政策汇集类"}
+{"query": "最近有没有关于虚开增值税专用发票的稽查案例", "expected_intent": "稽查案例类", "expected_route": "rag", "expected_kbase": "inspect_case", "rule_decidable": true, "note": "含'稽查案例'固定术语->稽查案例类，专查稽查案例库"}
+{"query": "企业偷逃企业所得税被处罚的违法案例有哪些", "expected_intent": "稽查案例类", "expected_route": "rag", "expected_kbase": "inspect_case", "rule_decidable": true, "note": "含'违法案例'固定术语->稽查案例类"}
+{"query": "金税四期下骗取出口退税的稽查处罚力度如何", "expected_intent": "稽查案例类", "expected_route": "rag", "expected_kbase": "inspect_case", "rule_decidable": true, "note": "含'稽查处罚'固定术语->稽查案例类"}
+{"query": "杭州市2024年度社保缴费基数上限和下限分别是多少", "expected_intent": "查社保类", "expected_route": "rag", "expected_kbase": "social_security", "rule_decidable": true, "note": "'社保'+'基数/上限/下限'组合命中社保正则；route 仍为 rag 但附挂 shebao_agent 查表"}
+{"query": "上海公积金的最高缴费比例是多少", "expected_intent": "查社保类", "expected_route": "rag", "expected_kbase": "social_security", "rule_decidable": true, "note": "'公积金'+'比例/最高/缴费'组合命中社保正则->查社保类"}
+{"query": "灵活就业人员社会保险的最低缴费基数怎么算", "expected_intent": "查社保类", "expected_route": "rag", "expected_kbase": "social_security", "rule_decidable": true, "note": "'社会保险'+'最低/基数/缴费'组合命中社保正则->查社保类"}
+{"query": "餐饮服务的税收分类编码是多少", "expected_intent": "查商品编码类", "expected_route": "rag", "expected_kbase": "product_code", "rule_decidable": true, "note": "含'税收分类编码'术语->查商品编码类；route 为 rag 附挂 product_code_agent 查表"}
+{"query": "办公用纸的开票编码应该选哪个", "expected_intent": "查商品编码类", "expected_route": "rag", "expected_kbase": "product_code", "rule_decidable": true, "note": "含'开票编码'术语->查商品编码类"}
+{"query": "各分公司本月销售额排名前十分别是哪些", "expected_intent": "经营数据查询类", "expected_route": "text2sql", "expected_kbase": null, "rule_decidable": true, "note": "含'销售额/排名/前十'数据分析词->经营数据查询类，唯一走 Text2SQL 的意图"}
+{"query": "今年公司营收同比增长了多少", "expected_intent": "经营数据查询类", "expected_route": "text2sql", "expected_kbase": null, "rule_decidable": true, "note": "含'营收/同比'关键词且命中'今年...多少'数据句式->经营数据查询类(Text2SQL)"}
+{"query": "上季度各产品线的毛利和净利润汇总一下", "expected_intent": "经营数据查询类", "expected_route": "text2sql", "expected_kbase": null, "rule_decidable": true, "note": "含'毛利/净利润/汇总'数据词->经营数据查询类(Text2SQL)"}
+{"query": "公司刚成立的小规模纳税人一般怎么做账报税", "expected_intent": "通用问题类", "expected_route": "rag", "expected_kbase": "qa", "rule_decidable": false, "note": "口语化通用问答，规则全不中->落 LLM 兜底/默认通用问题类(本地问答库+政策库语义召回)"}
+{"query": "2025年最新的增值税留抵退税政策现在还能不能办，办理流程是什么", "expected_intent": "通用问题类", "expected_route": "rag", "expected_kbase": "qa", "rule_decidable": false, "web_fallback": true, "note": "政策时效类长问句，规则不中->通用问题类；本地大概率召回为空/过时，可触发联网兜底(WebSearchAgent，web 来源未核验)"}
+{"query": "最近12366热线说的那个新出的个体户定额核定征收口径，到底以哪个为准", "expected_intent": "通用问题类", "expected_route": "rag", "expected_kbase": "qa", "rule_decidable": false, "web_fallback": true, "note": "强时效/口语化，本地库大概率召回为空->触发联网兜底；web 结果仅作未核验补充，不进权威引用"}
+{"query": "那如果它当月销售额超过10万呢，还能享受免征吗", "expected_intent": "通用问题类", "expected_route": "rag", "expected_kbase": "qa", "rule_decidable": false, "multi_turn": true, "note": "多轮追问场景：'它/还能...吗'是省略主语的指代追问，依赖上轮(小规模纳税人免征增值税)上下文，需 query_rewrite 补全；规则不中->通用问题类。注意:本句含'销售额'但属追问语境，真实链路靠改写+上下文判定，离线规则会误判为数据查询，故标 rule_decidable=false 不纳入断言"}

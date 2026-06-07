@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>税务智能问答平台 · 当前项目详解</title>
+<style>
+  :root{
+    --bg:#0f1722; --ink:#1f2937; --muted:#64748b; --line:#e2e8f0;
+    --hd1:#1e293b; --hd2:#334155;
+    --c-config:#0ea5e9; --c-schema:#14b8a6; --c-client:#6366f1; --c-core:#8b5cf6;
+    --c-agent:#f59e0b; --c-mcp:#ec4899; --c-graph:#22c55e; --c-api:#ef4444;
+    --rag:#2563eb; --sql:#9333ea; --struct:#0d9488; --web:#94a3b8;
+    --star:#f59e0b; --ok:#16a34a; --warn:#d97706;
+    --panel:#ffffff; --soft:#f8fafc;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Microsoft YaHei","PingFang SC",-apple-system,Segoe UI,sans-serif;
+    color:var(--ink);background:#eef2f7;line-height:1.65;font-size:14px}
+  /* 顶部标题栏 */
+  header.top{background:linear-gradient(135deg,#0f1722 0%,#1e293b 60%,#243447 100%);
+    color:#fff;padding:26px 38px 18px}
+  header.top h1{margin:0;font-size:26px;letter-spacing:.5px;font-weight:700}
+  header.top .sub{margin:6px 0 0;color:#a9bdd6;font-size:14px}
+  .legend{margin-top:16px;display:flex;flex-wrap:wrap;gap:10px 18px;font-size:12.5px;color:#cdd9e8}
+  .legend .it{display:inline-flex;align-items:center;gap:6px}
+  .dot{width:12px;height:12px;border-radius:3px;display:inline-block}
+  .arrow-key{display:inline-flex;align-items:center;gap:6px}
+  .ln{width:26px;height:0;border-top:3px solid #888;display:inline-block}
+  .ln.main{border-top-style:solid;border-color:#22c55e}
+  .ln.branch{border-top-style:dashed;border-color:#f59e0b}
+  .ln.data{border-top-style:dotted;border-color:#6366f1}
+  /* 容器 */
+  main{padding:24px 30px 60px;max-width:1500px;margin:0 auto}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    margin:0 0 22px;box-shadow:0 1px 3px rgba(15,23,42,.05);overflow:hidden}
+  .s-hd{background:var(--hd1);color:#fff;padding:11px 18px;font-size:16px;font-weight:700;
+    display:flex;align-items:center;gap:10px}
+  .s-hd .no{background:#475569;border-radius:6px;padding:1px 9px;font-size:13px}
+  .s-hd.star{background:linear-gradient(90deg,#7c2d12,#b45309)}
+  .s-bd{padding:18px 20px}
+  /* 简介 */
+  .lead{font-size:15px;background:var(--soft);border-left:4px solid var(--rag);
+    padding:12px 16px;border-radius:0 8px 8px 0;margin:0 0 16px}
+  .stack{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{border:1px solid var(--line);background:#fff;border-radius:20px;padding:4px 12px;font-size:12.5px}
+  .chip b{color:var(--c-core)}
+  .grp-title{font-size:12px;color:var(--muted);margin:14px 0 6px;font-weight:700;letter-spacing:.5px}
+  /* 分层架构 */
+  .layers{display:flex;flex-direction:column;gap:10px}
+  .layer{border-radius:10px;padding:10px 14px;border:1px solid var(--line);
+    display:grid;grid-template-columns:150px 1fr;gap:12px;align-items:center;background:#fff}
+  .layer .tag{font-weight:700;color:#fff;border-radius:7px;padding:8px 10px;text-align:center;font-size:13px}
+  .layer .items{display:flex;flex-wrap:wrap;gap:7px}
+  .layer .it{background:var(--soft);border:1px solid var(--line);border-radius:6px;
+    padding:3px 9px;font-size:12.5px}
+  .layer .it code{color:var(--ink);font-family:Consolas,monospace}
+  /* 主链路泳道 */
+  .flow{display:flex;flex-direction:column;gap:14px}
+  .qu-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .nodebox{border:1px solid var(--line);background:#fff;border-radius:9px;padding:8px 12px;
+    font-size:13px;min-width:88px;text-align:center}
+  .nodebox.head{background:#1e293b;color:#fff;border-color:#1e293b;font-weight:700}
+  .arr{color:var(--muted);font-size:18px;font-weight:700}
+  .router{background:#fffbeb;border:2px dashed var(--c-agent);border-radius:10px;padding:10px 14px;
+    font-size:13px}
+  .router b{color:var(--warn)}
+  .three{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-top:6px}
+  @media(max-width:1100px){.three{grid-template-columns:1fr}}
+  .lane{border-radius:10px;border:1px solid var(--line);overflow:hidden}
+  .lane .lh{padding:8px 12px;color:#fff;font-weight:700;font-size:13.5px;display:flex;gap:8px;align-items:center}
+  .lane .lb{padding:12px;background:#fff;font-size:12.8px}
+  .lane.rag .lh{background:var(--rag)} .lane.sql .lh{background:var(--sql)} .lane.struct .lh{background:var(--struct)}
+  .step{background:var(--soft);border:1px solid var(--line);border-radius:7px;padding:6px 9px;margin:5px 0;
+    display:flex;align-items:center;gap:7px}
+  .step .n{font-size:11px;color:#fff;background:#64748b;border-radius:50%;width:18px;height:18px;
+    display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+  .funnel{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:8px 0;font-size:12px}
+  .fstage{background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:3px 8px;color:#1d4ed8}
+  .note{font-size:12px;color:var(--muted);margin-top:8px}
+  .sse{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .ev{font-family:Consolas,monospace;font-size:11.5px;background:#0f1722;color:#7ee787;border-radius:5px;padding:2px 8px}
+  /* Agent 能力地图 */
+  .amap{display:grid;grid-template-columns:1fr;gap:12px}
+  .super{background:#fffbeb;border:2px solid var(--c-agent);border-radius:10px;padding:12px 14px}
+  .super b{color:var(--warn)}
+  .subgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+  @media(max-width:1100px){.subgrid{grid-template-columns:repeat(2,1fr)}}
+  .acard{border:1px solid var(--line);border-radius:9px;padding:10px;background:#fff}
+  .acard .ah{font-weight:700;font-size:13px;margin-bottom:5px;display:flex;align-items:center;gap:6px}
+  .acard .role{font-size:11px;color:#fff;border-radius:5px;padding:1px 7px}
+  .acard p{margin:4px 0 0;font-size:12px;color:var(--muted)}
+  .acard code{font-family:Consolas,monospace;font-size:11.5px;color:var(--c-core)}
+  /* MCP */
+  .mcp2{display:grid;grid-template-columns:1fr 60px 1fr;gap:0;align-items:stretch}
+  @media(max-width:900px){.mcp2{grid-template-columns:1fr}}
+  .mcp-side{border:1px solid var(--line);border-radius:10px;padding:12px;background:#fff}
+  .mcp-side h4{margin:0 0 8px;font-size:13.5px}
+  .mcp-mid{display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--c-mcp);font-size:11px;gap:4px}
+  .tool{font-family:Consolas,monospace;font-size:12px;background:#fdf2f8;border:1px solid #fbcfe8;
+    border-radius:6px;padding:4px 9px;margin:5px 0;color:#9d174e}
+  /* 存储映射表 */
+  table{border-collapse:collapse;width:100%;font-size:12.8px}
+  th,td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
+  th{background:var(--soft);font-weight:700}
+  td code,th code{font-family:Consolas,monospace}
+  .badge{display:inline-block;border-radius:5px;padding:1px 7px;font-size:11px;color:#fff}
+  .b-doc{background:#2563eb}.b-struct{background:#0d9488}.b-web{background:#94a3b8}
+  /* e2e */
+  .e2e-sum{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:12px 16px;margin-bottom:14px;font-size:13.5px}
+  .e2e-sum b{color:var(--ok)}
+  .res-ok{color:var(--ok);font-weight:700}
+  .res-warn{color:var(--warn);font-weight:700}
+  .honest{margin-top:14px;background:#fef2f2;border-left:4px solid var(--c-api);border-radius:0 8px 8px 0;
+    padding:10px 14px;font-size:12.5px}
+  .honest b{color:var(--c-api)}
+  .star-ic{color:var(--star)}
+  footer{text-align:center;color:var(--muted);font-size:12px;padding:10px 0 30px}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <h1>税务智能问答平台 · 当前项目详解</h1>
+  <p class="sub">个人项目（参考公司生产架构自建）｜确定性路由 + 一张固定主图 + 多形态子能力｜已端到端真跑验证（答案经人工核对）</p>
+  <div class="legend">
+    <span class="it"><span class="dot" style="background:var(--rag)"></span>文档 RAG 链路</span>
+    <span class="it"><span class="dot" style="background:var(--sql)"></span>Text2SQL 子图</span>
+    <span class="it"><span class="dot" style="background:var(--struct)"></span>结构化查表</span>
+    <span class="it"><span class="dot" style="background:var(--web)"></span>联网补充（默认关·物理隔离）</span>
+    <span class="it"><span class="star-ic">★</span>关键节点 / 已真跑验证</span>
+    <span class="arrow-key"><span class="ln main"></span>主流程</span>
+    <span class="arrow-key"><span class="ln branch"></span>确定性分支</span>
+    <span class="arrow-key"><span class="ln data"></span>数据流/召回并入</span>
+  </div>
+</header>
+
+<main>
+
+<!-- ① 简介 + 技术栈 -->
+<section>
+  <div class="s-hd"><span class="no">①</span> 一句话简介 + 技术栈</div>
+  <div class="s-bd">
+    <p class="lead">一套<b>税务领域智能问答平台</b>：用户一句自然语言进来，先做查询理解（QU），再由
+    <b>确定性路由层</b>（非 LLM）决定走哪条路——经营数据走 <b>Text2SQL</b> 查数仓、社保/商品编码走<b>结构化查表</b>（RAG 兜底）、
+    其余走<b>文档 RAG 三级漏斗</b>并逐 token 流式作答；同时通过 <b>MCP</b> 把核心能力工具化对外，并以默认关闭、物理隔离的方式接入<b>联网补充</b>。</p>
+    <div class="grp-title">核心框架 / 编排</div>
+    <div class="stack">
+      <span class="chip"><b>FastAPI</b> + SSE 双流（updates 进度 + messages 逐 token）</span>
+      <span class="chip"><b>LangGraph</b> 主图 + Text2SQL 子图</span>
+      <span class="chip">确定性路由（IntentClassifier + SearchRouter，刻意不用 LLM supervisor）</span>
+      <span class="chip"><b>MCP</b>（server 对外暴露 / client streamable-http 对内调）</span>
+    </div>
+    <div class="grp-title">召回 / 排序 / 模型</div>
+    <div class="stack">
+      <span class="chip">混合召回：<b>Milvus</b> 稠密 + <b>ES</b> BM25 稀疏</span>
+      <span class="chip">Embedding：百炼 <b>text-embedding-v4</b>（1024 维）</span>
+      <span class="chip">RRF 粗排 → bge 精排 → 本地 <b>bge-reranker-v2-m3</b> 重排</span>
+      <span class="chip">LLM：OpenAI gpt-4o-mini（验证环境）</span>
+    </div>
+    <div class="grp-title">数仓 / 存储</div>
+    <div class="stack">
+      <span class="chip">Text2SQL：schema_link@<b>Qdrant</b> → 生成 SQL → <b>sqlglot</b> AST 安全校验 → <b>MySQL</b></span>
+      <span class="chip">存储栈：Milvus · ES · Qdrant · MySQL · Mongo · MinIO</span>
+    </div>
+  </div>
+</section>
+
+<!-- ② 分层架构 -->
+<section>
+  <div class="s-hd"><span class="no">②</span> 分层架构（config / schemas / clients / core / agents / mcp / graph / api）</div>
+  <div class="s-bd">
+    <div class="layers">
+      <div class="layer">
+        <div class="tag" style="background:var(--c-api)">api</div>
+        <div class="items"><span class="it">对外 HTTP 入口</span><span class="it"><code>routes_chat.py</code> SSE 问答</span><span class="it"><code>routes_health.py</code></span><span class="it"><code>main.py</code> FastAPI 装配</span></div>
+      </div>
+      <div class="layer">
+        <div class="tag" style="background:var(--c-graph)">graph</div>
+        <div class="items"><span class="it">链路图纸 + 发动机</span><span class="it"><code>pipeline.py</code> Orchestrator + 主图</span><span class="it"><code>nodes.py</code> 各节点实现</span><span class="it"><code>state.py</code> GraphState</span></div>
+      </div>
+      <div class="layer">
+        <div class="tag" style="background:var(--c-agent)">agents</div>
+        <div class="items"><span class="it"><code>qa_agent.py</code> 主图门面</span><span class="it"><code>text2sql_agent.py</code> 替换式子图</span><span class="it"><code>structured_agents.py</code> 社保/编码查表</span><span class="it"><code>web_search_agent.py</code> 联网</span><span class="it"><code>base.py</code> 三套 Protocol</span></div>
+      </div>
+      <div class="layer">
+        <div class="tag" style="background:var(--c-mcp)">mcp</div>
+        <div class="items"><span class="it"><code>server.py</code> 对外暴露 4 工具</span><span class="it">对内：client 调百炼 WebSearch</span></div>
+      </div>
+      <div class="layer">
+        <div class="tag" style="background:var(--c-core)">core</div>
+        <div class="items"><span class="it"><code>qu/</code> 意图分类+改写+抽取</span><span class="it"><code>router/</code> SearchRouter 路由表</span><span class="it"><code>recall/</code> hybrid 混合召回</span><span class="it"><code>rank/</code> 粗排+精排</span><span class="it"><code>rerank/</code> 重排</span><span class="it"><code>summarize/</code> 拼上下文</span></div>
+      </div>
+      <div class="layer">
+        <div class="tag" style="background:var(--c-client)">clients</div>
+        <div class="items"><span class="it"><code>milvus</code></span><span class="it"><code>es</code></span><span class="it"><code>qdrant_meta</code></span><span class="it"><code>mysql</code></span><span class="it"><code>mongo</code></span><span class="it"><code>minio</code></span><span class="it"><code>embedding</code></span><span class="it"><code>reranker</code></span><span class="it"><code>llm</code></span><span class="it"><code>mcp_client</code></span></div>
+      </div>
+      <div class="layer">
+        <div class="tag" style="background:var(--c-schema)">schemas</div>
+        <div class="items"><span class="it"><code>chat.py</code> ChatRequest / SSEMessage</span><span class="it"><code>document.py</code> Document / QUResult / RetrievalPlan / Text2SQLResult</span></div>
+      </div>
+      <div class="layer">
+        <div class="tag" style="background:var(--c-config)">config</div>
+        <div class="items"><span class="it"><code>constants.py</code> Intent / KBase / RouteType / SSEEvent</span><span class="it"><code>settings.py</code> 开关与连接配置</span><span class="it"><code>logging_config.py</code></span></div>
+      </div>
+    </div>
+    <p class="note">依赖方向自上而下：api/graph 编排 → agents 能力 → core 算法 → clients 基础设施；config/schemas 为全层共享的"词汇表"与契约。</p>
+  </div>
+</section>
+
+<!-- ③ 在线问答主链路 -->
+<section>
+  <div class="s-hd"><span class="no">③</span> 在线问答主链路（QU → 确定性路由 → 三路分流 → 流式生成）</div>
+  <div class="s-bd">
+    <div class="flow">
+
+      <!-- 入口 + QU + 路由 -->
+      <div class="qu-row">
+        <div class="nodebox head">用户一句话</div><span class="arr">→</span>
+        <div class="nodebox">load_memory<br><small>Mongo 历史</small></div><span class="arr">→</span>
+        <div class="nodebox">understand<br><small>查询理解 QU</small></div><span class="arr">→</span>
+        <div class="nodebox">route<br><small>SearchRouter</small></div>
+      </div>
+
+      <div class="router">
+        <b>★ 确定性路由层</b>（非 LLM、不可被模型改写）：<code>IntentClassifier</code>（规则/正则优先，全不中才 LLM 兜底，异常回退默认意图）
+        → <code>SearchRouter</code> 查静态映射表 <code>SEARCH_INSTANCE_MAPPING</code>（意图 → 查哪些库 / dense·sparse 权重 / 精排策略 / 是否挂结构化 Agent / 是否走 text2sql）
+        → <code>route_decider</code> 一个 if：<code>text2sql</code> 走子图，否则走主图 RAG。
+      </div>
+
+      <!-- 三路 -->
+      <div class="three">
+
+        <!-- 路1：Text2SQL -->
+        <div class="lane sql">
+          <div class="lh">① 经营数据查询类 → Text2SQL 子图</div>
+          <div class="lb">
+            <div style="font-size:11.5px;color:var(--muted);margin-bottom:6px">route_type=<b>text2sql</b>，替换整条 RAG pipeline</div>
+            <div class="step"><span class="n">1</span> schema_link（查 Qdrant 元数据）</div>
+            <div class="step"><span class="n">2</span> generate_sql（LLM 生成）</div>
+            <div class="step"><span class="n">3</span> ★ validate_fix（sqlglot AST 安全校验 / 修正，失败自环 ≤2 次）</div>
+            <div class="step"><span class="n">4</span> execute（查 MySQL 数仓）</div>
+            <div class="step"><span class="n">5</span> summarize（结论 + 伪流式）</div>
+            <p class="note">产出 <code>Text2SQLResult</code>（sql/columns/rows/summary/error）；任何一步失败收敛进 error，不打断 SSE。</p>
+          </div>
+        </div>
+
+        <!-- 路2：结构化查表 -->
+        <div class="lane struct">
+          <div class="lh">② 社保 / 商品编码 → 结构化查表 + RAG 兜底</div>
+          <div class="lb">
+            <div style="font-size:11.5px;color:var(--muted);margin-bottom:6px">route_type 仍是 <b>rag</b>，靠 <code>RetrievalPlan.agent_name</code> 挂查表 Agent</div>
+            <div class="step"><span class="n">1</span> ★ 优先查表：ShebaoAgent / ProductCodeAgent 直查 MySQL</div>
+            <div class="step"><span class="n">2</span> 命中 → 行包成 Document，<b>即作为召回结果（跳过文档召回）</b></div>
+            <div class="step"><span class="n">3</span> 无命中 → 回退文档 RAG 兜底</div>
+            <div class="step"><span class="n">4</span> 命中行 / 兜底文档统一进 粗排/精排/重排/摘要</div>
+            <p class="note">查表 Agent 是"召回的一路输入"（数据源），<b>非</b>与 QA 平级的独立子智能体。当前实现是<b>结构化优先</b>：命中即用查表结果、跳过文档召回，仅无命中才回退文档 RAG。可选经 MCP 改道（失败回退直连 MySQL）。</p>
+          </div>
+        </div>
+
+        <!-- 路3：文档 RAG -->
+        <div class="lane rag">
+          <div class="lh">③ 其余意图 → 文档 RAG 三级漏斗</div>
+          <div class="lb">
+            <div style="font-size:11.5px;color:var(--muted);margin-bottom:6px">精确法规 / 政策汇集 / 通用问答 / 稽查案例</div>
+            <div class="step"><span class="n">1</span> ★ 混合召回 hybrid（Milvus 稠密 + ES BM25，按意图调 dense/sparse 权重）</div>
+            <div class="funnel">
+              <span class="fstage">召回</span><span class="arr">→</span>
+              <span class="fstage">RRF 粗排</span><span class="arr">→</span>
+              <span class="fstage">bge 精排</span><span class="arr">→</span>
+              <span class="fstage">★ bge-reranker 重排</span>
+            </div>
+            <div class="step"><span class="n">2</span> build_context（拼上下文，分配 [[citation:N]]）</div>
+            <div class="step"><span class="n">3</span> ★ generate_answer（LLM <b>逐 token 流式</b>）</div>
+            <p class="note">权重示例：精确法规 dense 0.05/sparse 0.95；通用问答 dense 0.95/sparse 0.05（经验沉淀，写死在路由表）。</p>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- 收尾 + SSE -->
+      <div class="qu-row" style="margin-top:6px">
+        <div class="nodebox">save_memory<br><small>写回 Mongo</small></div><span class="arr">→</span>
+        <div class="nodebox head">SSE 流式返回前端</div>
+      </div>
+      <div>
+        <div class="grp-title" style="margin-top:4px">SSE 双流事件（stream_mode = ["updates","messages"]）</div>
+        <div class="sse">
+          <span class="ev">intent</span><span class="ev">retrieval(recall/coarse/fine/rerank)</span>
+          <span class="ev">references</span><span class="ev">sql</span>
+          <span class="ev">answer_delta（逐 token）</span><span class="ev">done</span><span class="ev">error</span>
+        </div>
+        <p class="note">updates 流 → intent/retrieval/references/sql 事件；messages 流 → 仅 <code>generate_answer</code> 节点的 LLM token 逐个产出 answer_delta（Text2SQL 结论为伪流式切块）。顶层 try/except 兜底，异常统一转 error 事件优雅收尾。</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ④ 主-子 Agent 能力地图 -->
+<section>
+  <div class="s-hd"><span class="no">④</span> 主-子 Agent 能力地图（确定性主 Agent + 多形态子能力）</div>
+  <div class="s-bd">
+    <div class="amap">
+      <div class="super">
+        <b>★ 确定性 Supervisor 路由层（主"Agent"）</b>：扮演别家"LLM supervisor"做的事——决定"这句话交给谁、怎么检索"，
+        但<b>刻意用确定性实现</b>（规则表 + 静态映射 + 一个 if）。理由：可控/可解释/零额外 token、权重是经验沉淀、安全边界清晰（联网开关不能由 LLM 决定）。
+      </div>
+      <div class="subgrid">
+        <div class="acard">
+          <div class="ah">🗂️ QaAgent <span class="role" style="background:var(--rag)">主图本体</span></div>
+          <p>QA <b>就是主图本身</b>，薄门面零逻辑，原样委托 <code>Orchestrator.astream</code>。<br>接口：<code>astream(req)→SSEMessage 流</code></p>
+        </div>
+        <div class="acard">
+          <div class="ah">🧮 Text2SQLAgent <span class="role" style="background:var(--sql)">替换式子图</span></div>
+          <p>意图=经营数据时<b>替换</b>整条 RAG，独立 LangGraph 子图翻 SQL 查数仓。<br>接口：<code>arun(query,qu)→Text2SQLResult</code></p>
+        </div>
+        <div class="acard">
+          <div class="ah">🏦 ShebaoAgent <span class="role" style="background:var(--struct)">召回源</span></div>
+          <p>社保基数/比例直查 MySQL，命中行即作召回结果（结构化优先·跳过文档召回；非平级）。<br>接口：<code>search(qu,topk)→list[Document]</code></p>
+        </div>
+        <div class="acard">
+          <div class="ah">🏷️ ProductCodeAgent <span class="role" style="background:var(--struct)">召回源</span></div>
+          <p>商品税收分类编码直查 MySQL，命中行即作召回结果（同构 Document，结构化优先）。<br>接口：<code>search(qu,topk)→list[Document]</code></p>
+        </div>
+        <div class="acard">
+          <div class="ah">🌐 WebSearchAgent <span class="role" style="background:var(--web)">隔离旁路</span></div>
+          <p><b>默认关·物理隔离</b>，经 MCP 调联网搜索，纯加法兜底，绝不进权威引用。<br>接口：<code>search(query)→list[Document]</code></p>
+        </div>
+      </div>
+      <p class="note"><code>base.py</code> 用三个独立 Protocol（QaAgentLike / ReplacingSubgraphAgent / RecallSourceAgent）如实刻画三类接口——返回类型、调用语义、生命周期都不同，故<b>不强行统一</b>成单一 BaseAgent。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ⑤ MCP 双向 -->
+<section>
+  <div class="s-hd"><span class="no">⑤</span> MCP 双向（对外暴露 4 工具 / 对内调百炼搜索）</div>
+  <div class="s-bd">
+    <div class="mcp2">
+      <div class="mcp-side">
+        <h4>↗ 对外暴露（server，FastMCP）</h4>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:6px">把核心能力工具化，供外部 MCP 客户端调用 — <code>app/mcp/server.py</code></div>
+        <div class="tool">tax_qa(question,user_id,session_id)</div>
+        <div class="tool">query_social_security(region,year)</div>
+        <div class="tool">query_product_code(product_name)</div>
+        <div class="tool">query_business_data(question)</div>
+      </div>
+      <div class="mcp-mid">
+        <div style="font-size:20px">⇄</div>
+        <div>MCP</div>
+        <div style="font-size:18px">⇄</div>
+      </div>
+      <div class="mcp-side">
+        <h4>↘ 对内调用（client，streamable-http）</h4>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:6px">联网补充来源 — <code>app/clients/mcp_client.py</code></div>
+        <div class="tool">百炼 WebSearch（建会话 → list_tools → call_tool）</div>
+        <p class="note" style="margin-top:8px">由 WebSearchAgent 经 http 传输分支调用；返回结果标注 <code>kbase=web / unverified=True</code>，<b>物理隔离</b>不进权威 [[citation:N]]。默认关（<code>websearch_mcp_enabled=False</code>），仅当本地召回 ≤2 且意图 ∈ {通用问题类, 政策汇集类} 才确定性触发。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ⑥ 存储与 7 KBase -->
+<section>
+  <div class="s-hd"><span class="no">⑥</span> 存储与 7 个 KBase 映射</div>
+  <div class="s-bd">
+    <table>
+      <thead><tr><th>KBase</th><th>类型</th><th>内容</th><th>存储 / 召回方式</th><th>由谁产出</th></tr></thead>
+      <tbody>
+        <tr><td><code>policy</code></td><td><span class="badge b-doc">文档库</span></td><td>政策法规条款</td><td>Milvus 稠密 + ES BM25</td><td>文档召回</td></tr>
+        <tr><td><code>qa</code></td><td><span class="badge b-doc">文档库</span></td><td>历史问答</td><td>Milvus + ES（多为直接透传）</td><td>文档召回</td></tr>
+        <tr><td><code>doc</code></td><td><span class="badge b-doc">文档库</span></td><td>多模态文档 / 操作手册</td><td>Milvus 稠密 + ES BM25</td><td>文档召回</td></tr>
+        <tr><td><code>inspect_case</code></td><td><span class="badge b-doc">文档库</span></td><td>稽查 / 处罚案例</td><td>Milvus + ES（语义为主）</td><td>文档召回</td></tr>
+        <tr><td><code>social_security</code></td><td><span class="badge b-struct">结构化</span></td><td>社保缴费基数 / 比例</td><td>MySQL 表（直查，不进 Milvus/ES）</td><td>ShebaoAgent</td></tr>
+        <tr><td><code>product_code</code></td><td><span class="badge b-struct">结构化</span></td><td>商品税收分类编码</td><td>MySQL 表（直查）</td><td>ProductCodeAgent</td></tr>
+        <tr><td><code>web</code></td><td><span class="badge b-web">联网补充</span></td><td>联网搜索结果（未核验）</td><td>不落库；MCP 联网，物理隔离</td><td>WebSearchAgent</td></tr>
+      </tbody>
+    </table>
+    <p class="note">底层存储栈：<b>Milvus</b>（稠密向量）· <b>ES</b>（BM25 稀疏）· <b>Qdrant</b>（Text2SQL schema linking 元数据）· <b>MySQL</b>（数仓星型表 + 社保/编码表）· <b>Mongo</b>（多轮会话记忆）· <b>MinIO</b>（对象存储）。前 4 个 KBase 走文档召回，后 2 个走结构化查表，web 为隔离旁路。</p>
+  </div>
+</section>
+
+<!-- ⑦ 端到端真跑验证 -->
+<section>
+  <div class="s-hd star"><span class="no">⑦</span> <span class="star-ic">★</span> 端到端真跑验证状态（引用 e2e 报告逐例结论）</div>
+  <div class="s-bd">
+    <div class="e2e-sum">
+      对真实运行的系统（conda <code>tax_qa</code> + Docker 全栈）跑 10 个例子，<b>覆盖全部链路分支，9/10 在管线内跑通并给出正确答案</b>；
+      第 10 条（联网兜底）在管线内未触发（本地召回恒充足，达不到"≤2"阈值），但<b>联网搜索能力已单独验证可用</b>（百炼 WebSearch MCP 返回真实结果）。
+      Text2SQL 数字与 MySQL 聚合一致；社保/编码查表命中真实表行；RAG 三级漏斗 + 本地 reranker + 逐 token 流式 + citation 全部真实运行。
+    </div>
+    <table>
+      <thead><tr><th>#</th><th>期望分支</th><th>意图判定</th><th>检索 / SQL</th><th>结果</th></tr></thead>
+      <tbody>
+        <tr><td>01</td><td>经营数据·Text2SQL</td><td>经营数据查询类</td><td>JOIN fact_sales_order+dim_region+dim_date … GROUP BY province，rows=6</td><td class="res-ok">✅ 浙江51.6万&gt;北京35.26万&gt;广东28.82万…（与 MySQL 一致）</td></tr>
+        <tr><td>02</td><td>经营数据·Text2SQL</td><td>经营数据查询类</td><td>JOIN …dim_product GROUP BY category，rows=3</td><td class="res-ok">✅ 电子111.12万/办公31.92万/家居16.2万</td></tr>
+        <tr><td>03</td><td>社保·结构化查表</td><td>查社保类</td><td>ShebaoAgent 查 dim_social_security，命中 1</td><td class="res-ok">✅ 杭州2024 下限4812/上限24930（与 seed 一致）</td></tr>
+        <tr><td>04</td><td>商品编码·结构化查表</td><td>查商品编码类</td><td>ProductCodeAgent 查 dim_tax_product_code，命中 2</td><td class="res-ok">✅ 天然气 1070201010000000000，税率9%</td></tr>
+        <tr><td>05</td><td>精确法规/通用·RAG</td><td>通用问题类</td><td>recall78→coarse50→fine20→rerank5</td><td class="res-ok">✅ 月10万/季30万免征增值税（带 citation）</td></tr>
+        <tr><td>06</td><td>政策汇集·RAG</td><td>政策汇集类</td><td>recall58→50→20→5</td><td class="res-ok">✅ 研发费用加计扣除政策</td></tr>
+        <tr><td>07</td><td>通用问答·RAG</td><td>政策汇集类</td><td>recall58→50→20→5</td><td class="res-ok">✅ 小型微利企业所得税优惠</td></tr>
+        <tr><td>08</td><td>稽查案例·RAG</td><td>稽查案例类</td><td>查 inspect_case 库 recall5→rerank5</td><td class="res-ok">✅ 虚开增值税专用发票典型案例</td></tr>
+        <tr><td>09</td><td>联网兜底</td><td>通用问题类</td><td>本地 recall78（&gt;2 阈值，未触发联网）</td><td class="res-warn">⚠️ 管线内未触发；联网能力见下方单独验证</td></tr>
+        <tr><td>10</td><td>多轮记忆</td><td>通用问题类</td><td>load/save Mongo 历史正常</td><td class="res-ok">✅ 承接会话，连贯作答</td></tr>
+      </tbody>
+    </table>
+    <p class="note" style="margin-top:10px"><b>联网搜索能力（单独验证）</b>：直接调 <code>WebSearchAgent().search(...)</code> → 百炼 WebSearch MCP（streamable http）：建会话 → list_tools(bailian_web_search) → call_tool → 返回 5 条真实联网结果，全部标注 <code>kbase=web / 未核验·以官方为准</code>，物理隔离不进权威引用。</p>
+    <div class="honest">
+      <b>诚实边界：</b>答案"正确性"为人工核对演示语料（自洽假数据）所得；<b>未做规模化评测（recall@k / 准确率 / QPS 等指标，本项目一律不写）</b>。联网兜底在当前语料下不触发（属设计内保守门控，非缺陷，能力已单独验证可用）；Reranker 首次需联网下载模型（~600MB，已用 HF 镜像）。
+    </div>
+  </div>
+</section>
+
+<footer>税务智能问答平台 · 当前项目详解 ｜ 个人项目，参考公司生产架构自建 ｜ 已端到端真跑验证（答案经人工核对）</footer>
+
+</main>
+</body>
+</html>

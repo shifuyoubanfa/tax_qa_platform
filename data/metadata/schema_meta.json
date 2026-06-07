@@ -1,0 +1,310 @@
+[
+  {
+    "table": "fact_sales_order",
+    "table_comment": "销售订单事实表（星型模型事实表，记录每笔销售订单的金额/数量/税额，按日期/地区/产品/客户维度聚合分析）",
+    "column": "order_id",
+    "column_comment": "订单ID（主键，每行一笔销售订单）",
+    "sample": "1001"
+  },
+  {
+    "table": "fact_sales_order",
+    "table_comment": "销售订单事实表（星型模型事实表，记录每笔销售订单的金额/数量/税额，按日期/地区/产品/客户维度聚合分析）",
+    "column": "date_key",
+    "column_comment": "日期外键，关联 dim_date.date_key（用于按年/月/季统计销售额）",
+    "sample": "20240115"
+  },
+  {
+    "table": "fact_sales_order",
+    "table_comment": "销售订单事实表（星型模型事实表，记录每笔销售订单的金额/数量/税额，按日期/地区/产品/客户维度聚合分析）",
+    "column": "region_key",
+    "column_comment": "地区外键，关联 dim_region.region_key（用于按省份/区域统计与排名）",
+    "sample": "1"
+  },
+  {
+    "table": "fact_sales_order",
+    "table_comment": "销售订单事实表（星型模型事实表，记录每笔销售订单的金额/数量/税额，按日期/地区/产品/客户维度聚合分析）",
+    "column": "product_key",
+    "column_comment": "产品外键，关联 dim_product.product_key（用于按品类/产品统计）",
+    "sample": "1"
+  },
+  {
+    "table": "fact_sales_order",
+    "table_comment": "销售订单事实表（星型模型事实表，记录每笔销售订单的金额/数量/税额，按日期/地区/产品/客户维度聚合分析）",
+    "column": "customer_key",
+    "column_comment": "客户外键，关联 dim_customer.customer_key（用于按客户/行业统计）",
+    "sample": "1"
+  },
+  {
+    "table": "fact_sales_order",
+    "table_comment": "销售订单事实表（星型模型事实表，记录每笔销售订单的金额/数量/税额，按日期/地区/产品/客户维度聚合分析）",
+    "column": "quantity",
+    "column_comment": "销售数量（单位：件/吨等，随产品而定）",
+    "sample": "120"
+  },
+  {
+    "table": "fact_sales_order",
+    "table_comment": "销售订单事实表（星型模型事实表，记录每笔销售订单的金额/数量/税额，按日期/地区/产品/客户维度聚合分析）",
+    "column": "sales_amount",
+    "column_comment": "销售额（不含税金额，单位：元，是各类销售额统计的核心度量）",
+    "sample": "85600.00"
+  },
+  {
+    "table": "fact_sales_order",
+    "table_comment": "销售订单事实表（星型模型事实表，记录每笔销售订单的金额/数量/税额，按日期/地区/产品/客户维度聚合分析）",
+    "column": "tax_amount",
+    "column_comment": "税额（该订单对应的增值税额，单位：元）",
+    "sample": "11128.00"
+  },
+  {
+    "table": "fact_sales_order",
+    "table_comment": "销售订单事实表（星型模型事实表，记录每笔销售订单的金额/数量/税额，按日期/地区/产品/客户维度聚合分析）",
+    "column": "total_amount",
+    "column_comment": "价税合计（含税金额，= sales_amount + tax_amount，单位：元）",
+    "sample": "96728.00"
+  },
+  {
+    "table": "dim_date",
+    "table_comment": "日期维度表（提供年/季/月/日及年月标签，支撑按时间维度的销售额汇总与同环比分析）",
+    "column": "date_key",
+    "column_comment": "日期主键（yyyymmdd 整数形式，关联 fact_sales_order.date_key）",
+    "sample": "20240115"
+  },
+  {
+    "table": "dim_date",
+    "table_comment": "日期维度表（提供年/季/月/日及年月标签，支撑按时间维度的销售额汇总与同环比分析）",
+    "column": "full_date",
+    "column_comment": "完整日期（DATE 类型，便于区间筛选）",
+    "sample": "2024-01-15"
+  },
+  {
+    "table": "dim_date",
+    "table_comment": "日期维度表（提供年/季/月/日及年月标签，支撑按时间维度的销售额汇总与同环比分析）",
+    "column": "year",
+    "column_comment": "年份（如 2024，用于按年统计）",
+    "sample": "2024"
+  },
+  {
+    "table": "dim_date",
+    "table_comment": "日期维度表（提供年/季/月/日及年月标签，支撑按时间维度的销售额汇总与同环比分析）",
+    "column": "quarter",
+    "column_comment": "季度（1—4，用于按季统计）",
+    "sample": "1"
+  },
+  {
+    "table": "dim_date",
+    "table_comment": "日期维度表（提供年/季/月/日及年月标签，支撑按时间维度的销售额汇总与同环比分析）",
+    "column": "month",
+    "column_comment": "月份（1—12，用于按月统计各月销售额）",
+    "sample": "1"
+  },
+  {
+    "table": "dim_date",
+    "table_comment": "日期维度表（提供年/季/月/日及年月标签，支撑按时间维度的销售额汇总与同环比分析）",
+    "column": "year_month_label",
+    "column_comment": "年月标签（如 2024-01，便于直接按月分组展示）",
+    "sample": "2024-01"
+  },
+  {
+    "table": "dim_region",
+    "table_comment": "地区维度表（省份/城市/大区，支撑各省销售额排名、区域对比等分析）",
+    "column": "region_key",
+    "column_comment": "地区主键（关联 fact_sales_order.region_key）",
+    "sample": "1"
+  },
+  {
+    "table": "dim_region",
+    "table_comment": "地区维度表（省份/城市/大区，支撑各省销售额排名、区域对比等分析）",
+    "column": "province",
+    "column_comment": "省份名称（如 浙江省、北京市，是各省排名分组字段）",
+    "sample": "浙江省"
+  },
+  {
+    "table": "dim_region",
+    "table_comment": "地区维度表（省份/城市/大区，支撑各省销售额排名、区域对比等分析）",
+    "column": "city",
+    "column_comment": "城市名称（如 杭州市、北京市）",
+    "sample": "杭州市"
+  },
+  {
+    "table": "dim_region",
+    "table_comment": "地区维度表（省份/城市/大区，支撑各省销售额排名、区域对比等分析）",
+    "column": "area",
+    "column_comment": "所属大区（华东/华北/华南/华中/西南等，用于区域汇总）",
+    "sample": "华东"
+  },
+  {
+    "table": "dim_product",
+    "table_comment": "产品维度表（产品名称/品类/品牌/单价，支撑各品类销售额、产品销量等分析）",
+    "column": "product_key",
+    "column_comment": "产品主键（关联 fact_sales_order.product_key）",
+    "sample": "1"
+  },
+  {
+    "table": "dim_product",
+    "table_comment": "产品维度表（产品名称/品类/品牌/单价，支撑各品类销售额、产品销量等分析）",
+    "column": "product_name",
+    "column_comment": "产品名称（如 笔记本电脑、办公桌）",
+    "sample": "笔记本电脑"
+  },
+  {
+    "table": "dim_product",
+    "table_comment": "产品维度表（产品名称/品类/品牌/单价，支撑各品类销售额、产品销量等分析）",
+    "column": "category",
+    "column_comment": "产品品类（如 电子产品、办公用品、家居，是各品类统计的分组字段）",
+    "sample": "电子产品"
+  },
+  {
+    "table": "dim_product",
+    "table_comment": "产品维度表（产品名称/品类/品牌/单价，支撑各品类销售额、产品销量等分析）",
+    "column": "brand",
+    "column_comment": "品牌名称",
+    "sample": "联想"
+  },
+  {
+    "table": "dim_product",
+    "table_comment": "产品维度表（产品名称/品类/品牌/单价，支撑各品类销售额、产品销量等分析）",
+    "column": "unit_price",
+    "column_comment": "产品单价（不含税参考单价，单位：元）",
+    "sample": "5800.00"
+  },
+  {
+    "table": "dim_customer",
+    "table_comment": "客户维度表（客户名称/所属行业/客户类型/纳税人身份，支撑按客户/行业的销售分析）",
+    "column": "customer_key",
+    "column_comment": "客户主键（关联 fact_sales_order.customer_key）",
+    "sample": "1"
+  },
+  {
+    "table": "dim_customer",
+    "table_comment": "客户维度表（客户名称/所属行业/客户类型/纳税人身份，支撑按客户/行业的销售分析）",
+    "column": "customer_name",
+    "column_comment": "客户名称",
+    "sample": "杭州智云科技有限公司"
+  },
+  {
+    "table": "dim_customer",
+    "table_comment": "客户维度表（客户名称/所属行业/客户类型/纳税人身份，支撑按客户/行业的销售分析）",
+    "column": "industry",
+    "column_comment": "客户所属行业（如 信息技术、制造业、批发零售）",
+    "sample": "信息技术"
+  },
+  {
+    "table": "dim_customer",
+    "table_comment": "客户维度表（客户名称/所属行业/客户类型/纳税人身份，支撑按客户/行业的销售分析）",
+    "column": "customer_type",
+    "column_comment": "客户类型（企业/个体工商户）",
+    "sample": "企业"
+  },
+  {
+    "table": "dim_customer",
+    "table_comment": "客户维度表（客户名称/所属行业/客户类型/纳税人身份，支撑按客户/行业的销售分析）",
+    "column": "taxpayer_type",
+    "column_comment": "纳税人身份（一般纳税人/小规模纳税人）",
+    "sample": "一般纳税人"
+  },
+  {
+    "table": "dim_social_security",
+    "table_comment": "社保缴费维度表（结构化源，按地区+年度记录各险种缴费基数上下限与单位/个人费率，供 ShebaoAgent 精确查表）",
+    "column": "region",
+    "column_comment": "地区（城市名，如 杭州/北京，ShebaoAgent 按此列匹配）",
+    "sample": "杭州"
+  },
+  {
+    "table": "dim_social_security",
+    "table_comment": "社保缴费维度表（结构化源，按地区+年度记录各险种缴费基数上下限与单位/个人费率，供 ShebaoAgent 精确查表）",
+    "column": "year",
+    "column_comment": "年度（如 2024，ShebaoAgent 按此列匹配）",
+    "sample": "2024"
+  },
+  {
+    "table": "dim_social_security",
+    "table_comment": "社保缴费维度表（结构化源，按地区+年度记录各险种缴费基数上下限与单位/个人费率，供 ShebaoAgent 精确查表）",
+    "column": "base_lower",
+    "column_comment": "缴费基数下限（元/月）",
+    "sample": "4812.00"
+  },
+  {
+    "table": "dim_social_security",
+    "table_comment": "社保缴费维度表（结构化源，按地区+年度记录各险种缴费基数上下限与单位/个人费率，供 ShebaoAgent 精确查表）",
+    "column": "base_upper",
+    "column_comment": "缴费基数上限（元/月）",
+    "sample": "24930.00"
+  },
+  {
+    "table": "dim_social_security",
+    "table_comment": "社保缴费维度表（结构化源，按地区+年度记录各险种缴费基数上下限与单位/个人费率，供 ShebaoAgent 精确查表）",
+    "column": "pension_company_rate",
+    "column_comment": "养老保险单位缴费比例（如 0.16 表示16%）",
+    "sample": "0.16"
+  },
+  {
+    "table": "dim_social_security",
+    "table_comment": "社保缴费维度表（结构化源，按地区+年度记录各险种缴费基数上下限与单位/个人费率，供 ShebaoAgent 精确查表）",
+    "column": "pension_personal_rate",
+    "column_comment": "养老保险个人缴费比例（如 0.08 表示8%）",
+    "sample": "0.08"
+  },
+  {
+    "table": "dim_social_security",
+    "table_comment": "社保缴费维度表（结构化源，按地区+年度记录各险种缴费基数上下限与单位/个人费率，供 ShebaoAgent 精确查表）",
+    "column": "medical_company_rate",
+    "column_comment": "医疗保险（含生育）单位缴费比例",
+    "sample": "0.095"
+  },
+  {
+    "table": "dim_social_security",
+    "table_comment": "社保缴费维度表（结构化源，按地区+年度记录各险种缴费基数上下限与单位/个人费率，供 ShebaoAgent 精确查表）",
+    "column": "medical_personal_rate",
+    "column_comment": "医疗保险个人缴费比例",
+    "sample": "0.02"
+  },
+  {
+    "table": "dim_social_security",
+    "table_comment": "社保缴费维度表（结构化源，按地区+年度记录各险种缴费基数上下限与单位/个人费率，供 ShebaoAgent 精确查表）",
+    "column": "unemployment_company_rate",
+    "column_comment": "失业保险单位缴费比例",
+    "sample": "0.005"
+  },
+  {
+    "table": "dim_social_security",
+    "table_comment": "社保缴费维度表（结构化源，按地区+年度记录各险种缴费基数上下限与单位/个人费率，供 ShebaoAgent 精确查表）",
+    "column": "unemployment_personal_rate",
+    "column_comment": "失业保险个人缴费比例",
+    "sample": "0.005"
+  },
+  {
+    "table": "dim_social_security",
+    "table_comment": "社保缴费维度表（结构化源，按地区+年度记录各险种缴费基数上下限与单位/个人费率，供 ShebaoAgent 精确查表）",
+    "column": "injury_company_rate",
+    "column_comment": "工伤保险单位缴费比例（个人不缴）",
+    "sample": "0.004"
+  },
+  {
+    "table": "dim_tax_product_code",
+    "table_comment": "商品税收分类编码维度表（结构化源，记录商品名称/税收分类编码/类别/适用税率，供 ProductCodeAgent 按商品名模糊查表）",
+    "column": "product_name",
+    "column_comment": "商品/服务名称（如 天然气、建筑服务，ProductCodeAgent 按此列 LIKE 匹配）",
+    "sample": "天然气"
+  },
+  {
+    "table": "dim_tax_product_code",
+    "table_comment": "商品税收分类编码维度表（结构化源，记录商品名称/税收分类编码/类别/适用税率，供 ProductCodeAgent 按商品名模糊查表）",
+    "column": "code",
+    "column_comment": "税收分类编码（19位，开票时填写）",
+    "sample": "1070201010000000000"
+  },
+  {
+    "table": "dim_tax_product_code",
+    "table_comment": "商品税收分类编码维度表（结构化源，记录商品名称/税收分类编码/类别/适用税率，供 ProductCodeAgent 按商品名模糊查表）",
+    "column": "category",
+    "column_comment": "所属类别（货物/服务大类，如 成品油及其他能源、建筑服务）",
+    "sample": "成品油及其他能源"
+  },
+  {
+    "table": "dim_tax_product_code",
+    "table_comment": "商品税收分类编码维度表（结构化源，记录商品名称/税收分类编码/类别/适用税率，供 ProductCodeAgent 按商品名模糊查表）",
+    "column": "rate",
+    "column_comment": "适用增值税税率（如 0.09 表示9%）",
+    "sample": "0.09"
+  }
+]

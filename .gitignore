@@ -1,0 +1,43 @@
+# ===== 密钥 / 敏感（绝不提交！）=====
+# 真实环境配置含 OpenAI/百炼 key 等敏感信息——只提交占位模板 .env.example
+.env
+.env.local
+.env.*.local
+!.env.example
+# 运行日志：app.log 会记录到真实服务地址/密钥片段，绝不入库
+logs/
+*.log
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# ===== 虚拟环境 =====
+.venv/
+venv/
+env/
+ENV/
+
+# ===== 临时调试目录（本地探针/中间产物，不入库）=====
+_tmp*/
+data/_inspect_tmp/
+
+# ===== 模型缓存（本地 reranker 模型，体积大，不入库）=====
+models/
+*.bin
+*.safetensors
+
+# ===== 编辑器 / 操作系统 =====
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

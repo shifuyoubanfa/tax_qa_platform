@@ -1,0 +1,70 @@
+# ============================================================================
+# tax_qa_platform 依赖清单
+# 说明（便于学习）：
+#   - 版本约束统一用 ">=" 宽松写法，方便在不同环境里安装；如需复现可自行 pip freeze 锁版本。
+#   - 所有"重依赖"（本地 embedding / rerank / PDF 解析）默认注释掉：走 HTTP 服务模式时无需安装，
+#     只有当 EMBEDDING_MODE=local / RERANKER_MODE=local / MINERU_MODE=local 时才解开对应行。
+#   - 外部基础设施（Milvus/ES/Qdrant/MySQL/Mongo/MinIO）只需要安装对应的"客户端SDK"，
+#     服务本体用 docker 等方式单独部署，见 README 运行手册。
+# ============================================================================
+
+# ---------- Web 框架 / 服务 ----------
+fastapi                       # Web 框架，提供 /api/v1/chat 等接口
+uvicorn[standard]             # ASGI 服务器，启动 FastAPI（standard 含 uvloop/httptools 等加速件）
+python-multipart              # 解析 multipart 表单（如后续支持文件上传）
+sse-starlette                 # 服务端流式推送(SSE)封装，配合 StreamingResponse 做流式回答
+
+# ---------- 配置 / 校验 ----------
+pydantic>=2.6                 # 数据模型与校验（schemas 全靠它）
+pydantic-settings>=2.2        # 从 .env 读取配置到 settings（见 config/settings.py）
+python-dotenv                 # 加载 .env 环境变量
+
+# ---------- 大模型 / 编排 ----------
+langchain-core>=0.3           # LangChain 核心抽象（消息、Runnable 等）
+langchain-openai>=0.2         # OpenAI 兼容客户端（get_llm 基于它，对标掌柜智库 lm_utils）
+langgraph>=0.2                # 图式编排（主问答 pipeline 与 Text2SQL agent 都用它）
+openai>=1.30                  # OpenAI SDK，langchain-openai 底层依赖
+
+# ---------- 向量库 / 全文检索 ----------
+pymilvus>=2.4                 # Milvus 客户端（文档稠密向量召回）
+elasticsearch>=8.13,<9        # Elasticsearch 客户端（BM25/全文稀疏召回，锁 8.x 与服务端匹配）
+qdrant-client>=1.9,<1.10      # Qdrant 客户端，pin <1.10：docker server 为 1.9；新版客户端删了 .search 且 query_points 需 server>=1.10
+
+# ---------- 关系库 / 文档库 / 对象存储 ----------
+SQLAlchemy>=2.0               # ORM/连接池（MySQL 异步引擎）
+aiomysql                      # MySQL 异步驱动（配合 SQLAlchemy async）
+motor                         # MongoDB 异步驱动（多轮会话历史）
+pymongo                       # MongoDB 同步驱动（motor 依赖，也供脚本使用）
+minio                         # MinIO 对象存储客户端（多模态图片）
+
+# ---------- 通用工具 ----------
+httpx                         # 异步 HTTP 客户端（调 embedding/rerank/MinerU 的 http 模式）
+numpy                         # 向量/分数归一化、RRF 等数值计算
+pandas                        # Text2SQL 结果整理、数据处理
+tenacity                      # 外部调用的重试装饰器（网络抖动时自动重试）
+termcolor                     # 终端彩色日志/自测输出（对标参考项目）
+companynameparser             # 公司名解析（实体抽取里识别公司名）
+mcp                           # MCP（Model Context Protocol）客户端协议（结构化查询可选外接工具）
+sqlglot                       # Text2SQL 的 SQL AST 安全校验用：把 SQL 解析成语法树做只读白名单（比关键词黑名单更能防注释/大小写/INTO OUTFILE 绕过）
+
+# ---------- PDF 文本抽取（轻量，纯 Python，无需重模型） ----------
+pypdf                         # 轻量 PDF 文本抽取：ingest 本地解析 PDF（scripts/ingest_documents.py）；区别于 MinerU 的结构化解析
+# 注：示例 PDF 已预生成在 data/documents/pdf/（生成脚本已移除，不再需要 fpdf2）。
+
+# ---------- 本地重排模型（reranker 走本地，必装） ----------
+# 重排模型 bge-reranker-v2-m3 由 FlagReranker 本地加载，首次自动下载(约600MB)。
+FlagEmbedding                 # 加载本地 cross-encoder 重排模型（FlagReranker）
+torch                         # FlagEmbedding 依赖的深度学习框架；安装较重，CPU 版默认即可，有 GPU 可换 CUDA 版
+
+# ---------- 测试 ----------
+pytest                        # 单元测试框架
+pytest-asyncio               # 异步测试支持（async 接口/客户端测试）
+
+# ============================================================================
+# 以下为"可选重依赖"，默认不安装，仅在需要时解开：
+# ============================================================================
+# 说明：嵌入(embedding)走公司 HTTP bge-m3 服务，无需本地模型；重排(reranker)已走本地，
+#       所需的 FlagEmbedding+torch 已在上方"本地重排模型"里列为必装。
+#
+# 本地 PDF/文档解析（MINERU_MODE=local，入库 PDF 才需要；md/txt 不需要）：
+# magic-pdf                # MinerU 本地解析（PDF->结构化+图片），依赖较重

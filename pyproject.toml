@@ -1,0 +1,23 @@
+# ============================================================================
+# 让 config / app / scripts 这三个顶层包"在任何目录、任何运行方式下都能 import"。
+# 一次性安装（在 conda 环境里、项目根目录执行）：
+#     pip install -e .
+# 装完后：点 IDE 运行按钮跑任意 .py、python -m、pytest、uvicorn 都不会再报
+#     ModuleNotFoundError: No module named 'config'
+# 说明：依赖仍由 requirements.txt 管理（pip install -r requirements.txt），本文件不重复声明依赖，
+#       只负责把项目自身做成"可编辑安装"的包，把项目根加入 import 搜索路径。
+# ============================================================================
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tax-qa-platform"
+version = "0.1.0"
+description = "税务智能问答平台（意图路由 + 混合RAG + Text2SQL，教学级工程）"
+requires-python = ">=3.10"
+
+# 扁平多包布局：把这三个顶层目录及其所有子包都纳入（凭各自的 __init__.py 识别）。
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["config*", "app*", "scripts*"]

@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>朴素 RAG 基线讲解 · 与当前项目能力对比</title>
+<style>
+  :root{
+    --ink:#0f2233; --bg:#eef2f6; --card:#ffffff; --line:#d7e0ea;
+    --head1:#1b2a3a; --head2:#26405a; --muted:#5b6b7c;
+    --base:#7a8aa0;       /* 基线灰蓝 */
+    --base-soft:#eef1f6;  --base-line:#c8d2e0;
+    --proj:#1f7a5a;       /* 当前项目绿 */
+    --proj-soft:#e7f5ee;  --proj-line:#a9d9c4;
+    --gold:#c8901f; --gold-soft:#fbf2dc;
+    --blue:#2b6cb0; --blue-soft:#e6f0fa;
+    --red:#b4413c;
+    --shadow:0 1px 2px rgba(15,34,51,.06), 0 4px 14px rgba(15,34,51,.06);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:"Microsoft YaHei","PingFang SC","Segoe UI",system-ui,sans-serif;
+    color:var(--ink); background:var(--bg); line-height:1.7; font-size:14px;
+  }
+  .wrap{max-width:1380px; margin:0 auto; padding:0 22px 64px;}
+
+  /* 顶部深色标题栏 */
+  header.topbar{
+    background:linear-gradient(135deg,var(--head1),var(--head2));
+    color:#fff; padding:26px 0 18px; box-shadow:var(--shadow);
+  }
+  .topbar .inner{max-width:1380px; margin:0 auto; padding:0 22px;}
+  .topbar h1{margin:0; font-size:25px; letter-spacing:.5px; font-weight:800;}
+  .topbar .sub{margin:7px 0 0; color:#c5d4e2; font-size:14px; font-weight:400;}
+  .legend{
+    margin-top:14px; display:flex; flex-wrap:wrap; gap:9px 16px; align-items:center;
+    font-size:12.5px; color:#dce6f0;
+  }
+  .legend .item{display:inline-flex; align-items:center; gap:6px;}
+  .chip{display:inline-block; width:14px; height:14px; border-radius:4px; border:1px solid rgba(255,255,255,.4);}
+  .chip.base{background:var(--base);}
+  .chip.proj{background:var(--proj);}
+  .chip.gold{background:var(--gold);}
+  .chip.arrow{width:auto; height:auto; border:none; font-weight:700; color:#fff;}
+
+  /* 区段 */
+  section{margin-top:30px;}
+  .sec-head{display:flex; align-items:baseline; gap:12px; margin:0 0 14px;}
+  .sec-head .no{
+    background:var(--head2); color:#fff; font-weight:800; font-size:13px;
+    border-radius:7px; padding:3px 10px; flex:0 0 auto;
+  }
+  .sec-head h2{margin:0; font-size:19px; font-weight:800; color:var(--head1);}
+  .sec-head .tag{font-size:12px; color:var(--muted); font-weight:400;}
+
+  .note{
+    background:var(--gold-soft); border:1px solid #ecd9a8; border-left:4px solid var(--gold);
+    border-radius:8px; padding:11px 14px; font-size:12.8px; color:#5a4711; margin:0 0 16px;
+  }
+  .note b{color:#7a5e0e;}
+
+  /* 卡片 / 分组框 */
+  .cards{display:grid; gap:16px;}
+  .cards.two{grid-template-columns:1fr 1fr;}
+  .card{
+    background:var(--card); border:1px solid var(--line); border-radius:12px;
+    box-shadow:var(--shadow); padding:16px 18px;
+  }
+  .card.base{border-top:4px solid var(--base);}
+  .card.proj{border-top:4px solid var(--proj);}
+  .card h3{margin:0 0 6px; font-size:16px; font-weight:800; display:flex; align-items:center; gap:8px;}
+  .card h3 .badge{
+    font-size:11px; font-weight:700; padding:2px 9px; border-radius:20px; color:#fff;
+  }
+  .badge.base{background:var(--base);}
+  .badge.proj{background:var(--proj);}
+  .card .desc{font-size:12.6px; color:var(--muted); margin:0 0 10px;}
+
+  ul.feat{list-style:none; margin:0; padding:0;}
+  ul.feat li{
+    position:relative; padding:6px 8px 6px 28px; font-size:13px; border-radius:7px;
+    margin-bottom:4px;
+  }
+  ul.feat li .mk{position:absolute; left:7px; top:6px; font-weight:800; font-size:13px;}
+  li.has{background:var(--proj-soft);}
+  li.has .mk{color:var(--proj);}
+  li.no{background:#fbecec; color:#6b3330;}
+  li.no .mk{color:var(--red);}
+  li.has b, li.no b{font-weight:800;}
+  .lead{font-size:12.4px; color:var(--muted); margin:2px 0 6px; font-weight:600; letter-spacing:.3px;}
+
+  /* 流水线小图 */
+  .pipe{
+    display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:8px 0 4px;
+    font-size:11.8px;
+  }
+  .pipe .n{
+    background:#f3f6fa; border:1px solid var(--line); border-radius:6px; padding:3px 8px; white-space:nowrap;
+  }
+  .pipe .n.star{background:var(--gold-soft); border-color:#e6cf95; font-weight:700;}
+  .pipe .a{color:var(--muted); font-weight:800;}
+
+  /* 对比表 */
+  .table-scroll{overflow-x:auto; border-radius:12px; box-shadow:var(--shadow); border:1px solid var(--line);}
+  table.cmp{border-collapse:collapse; width:100%; min-width:880px; background:#fff; font-size:13px;}
+  table.cmp th, table.cmp td{border:1px solid var(--line); padding:10px 12px; vertical-align:top; text-align:left;}
+  table.cmp thead th{
+    background:var(--head2); color:#fff; font-weight:700; font-size:13px; position:sticky; top:0;
+  }
+  table.cmp thead th.col-base{background:#5a6b80;}
+  table.cmp thead th.col-proj{background:var(--proj);}
+  table.cmp tbody td.dim{font-weight:700; background:#f5f8fb; white-space:nowrap; color:var(--head1);}
+  table.cmp td.base-cell{background:#fafbfd;}
+  table.cmp td.proj-cell{background:var(--proj-soft);}
+  .yes{color:var(--proj); font-weight:800;}
+  .same{color:#5a7d6e; font-weight:700;}
+  .nope{color:var(--red); font-weight:800;}
+  .pill{
+    display:inline-block; font-size:10.5px; font-weight:700; padding:1px 7px; border-radius:20px;
+    margin-left:6px; vertical-align:middle;
+  }
+  .pill.both{background:var(--blue-soft); color:var(--blue); border:1px solid #b9d4ee;}
+  .pill.only{background:var(--gold-soft); color:#8a6610; border:1px solid #e6cf95;}
+  tr.only-row td.dim{box-shadow:inset 4px 0 0 var(--gold);}
+  tr.both-row td.dim{box-shadow:inset 4px 0 0 var(--blue);}
+
+  /* 扩展性叙事 */
+  .fusion{
+    display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:stretch;
+  }
+  .src-card{
+    background:#fff; border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow);
+    padding:15px 17px; border-left:4px solid var(--blue);
+  }
+  .src-card h4{margin:0 0 4px; font-size:15px; font-weight:800;}
+  .src-card .from{font-size:11.5px; color:var(--blue); font-weight:700; margin-bottom:8px;}
+  .src-card p{margin:0; font-size:12.6px; color:var(--muted);}
+  .plus{
+    display:flex; align-items:center; justify-content:center; gap:10px; margin:6px 0;
+    font-size:13px; color:var(--muted); font-weight:700;
+  }
+  .merge-box{
+    margin-top:16px; background:linear-gradient(135deg,#f0f7f3,#e7f5ee);
+    border:1px solid var(--proj-line); border-radius:12px; padding:18px 20px; box-shadow:var(--shadow);
+  }
+  .merge-box h4{margin:0 0 8px; font-size:16px; font-weight:800; color:var(--proj);}
+  .merge-box .arrow-line{display:flex; flex-wrap:wrap; align-items:center; gap:8px; font-size:12.5px; margin-top:8px;}
+  .stage{background:#fff; border:1px solid var(--proj-line); border-radius:7px; padding:4px 11px; white-space:nowrap;}
+  .stage.from1{border-color:#b9d4ee;}
+  .stage.add{border-color:#e6cf95; background:var(--gold-soft); font-weight:700;}
+
+  /* 添加标签 */
+  .add-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:14px;}
+  .add-item{
+    background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px 14px; box-shadow:var(--shadow);
+    border-top:3px solid var(--gold);
+  }
+  .add-item .t{font-weight:800; font-size:13.5px; margin-bottom:3px; display:flex; gap:6px; align-items:center;}
+  .add-item .d{font-size:12px; color:var(--muted);}
+
+  footer.disc{
+    margin-top:34px; background:#fff; border:1px dashed var(--base-line); border-radius:10px;
+    padding:14px 18px; font-size:12.3px; color:var(--muted);
+  }
+  footer.disc b{color:var(--red);}
+
+  @media (max-width:900px){
+    .cards.two,.fusion,.add-grid{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="inner">
+    <h1>朴素 RAG 基线讲解 &nbsp;·&nbsp; 与当前项目的能力对比</h1>
+    <p class="sub">这是【能力覆盖 / 设计取舍】层面的对照，<b style="color:#f0d28a;">不是性能指标对比</b>——双方都未做规模化评测。基线代表"一个现有的单能力文档检索系统"。</p>
+    <div class="legend">
+      <span class="item"><span class="chip base"></span>朴素 / 通用 RAG 基线（单能力文档问答）</span>
+      <span class="item"><span class="chip proj"></span>当前项目（多能力问答平台）</span>
+      <span class="item"><span class="chip gold"></span>★ 当前项目独有的扩展点</span>
+      <span class="item"><span class="chip" style="background:var(--blue);"></span>两者都有的共同基座</span>
+      <span class="item"><span class="chip arrow">→</span>主流程&nbsp;&nbsp;<span style="color:#9ab3cb;">⇢ 数据流 / 旁路</span></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="note" style="margin-top:22px;">
+    <b>诚实红线：</b>"基线"指<b>一个现有的单能力检索系统</b>的通用形态，<b>不点名任何具体产品</b>、不声称是其真实实现。本对比只比"能力覆盖与设计取舍"，<b>不写任何召回率/准确率/QPS 等效果指标</b>。当前项目已端到端真跑通、答案经人工核对（见 <code>docs/e2e_验证报告.md</code>）。
+  </div>
+
+  <!-- ① 基线有什么 -->
+  <section>
+    <div class="sec-head">
+      <span class="no">①</span>
+      <h2>朴素 / 通用 RAG 基线——它【已经具备】的能力</h2>
+      <span class="tag">一套成熟的"单一文档问答"系统该有的部分，当前项目同样保留</span>
+    </div>
+    <p class="lead">基线 = 围绕"文档知识库"的检索问答：把问题理解成意图、按意图混合召回、逐级排序提纯、生成带引用的答案；结构化的精确值用查表 Agent 补。</p>
+    <div class="cards two">
+      <div class="card base">
+        <h3><span class="badge base">基线</span>文档混合召回 + 三级排序漏斗</h3>
+        <p class="desc">面向非结构化政策/问答文档的检索主链路，这是 RAG 系统的核心，也是基线最扎实的部分。</p>
+        <div class="pipe">
+          <span class="n">意图理解 QU</span><span class="a">→</span>
+          <span class="n star">混合召回 dense+sparse</span><span class="a">→</span>
+          <span class="n">粗排 RRF 去重</span><span class="a">→</span>
+          <span class="n">精排 bge</span><span class="a">→</span>
+          <span class="n star">重排 cross-encoder</span><span class="a">→</span>
+          <span class="n">带 citation 生成</span>
+        </div>
+        <ul class="feat">
+          <li class="has"><span class="mk">✓</span> <b>稠密 + 稀疏混合召回</b>：向量召回 + BM25 全文，按意图配 dense/sparse 权重后归一化融合</li>
+          <li class="has"><span class="mk">✓</span> <b>粗排（RRF）</b>：多子查询 / 多库结果倒数排名融合 + 去重</li>
+          <li class="has"><span class="mk">✓</span> <b>精排（bge）</b>：按意图选标题 / 正文做语义相似重排序</li>
+          <li class="has"><span class="mk">✓</span> <b>重排（cross-encoder）</b>：query×doc 交叉打分定稿 top-k</li>
+          <li class="has"><span class="mk">✓</span> <b>带引用生成</b>：依据片段作答、句末标 [citation:x]、附免责声明</li>
+        </ul>
+      </div>
+      <div class="card base">
+        <h3><span class="badge base">基线</span>确定性意图路由 + 结构化查表</h3>
+        <p class="desc">用规则优先的意图分类驱动检索策略；社保基数、商品税收分类编码这类"精确值"由查表 Agent 直查数据库并入召回池。</p>
+        <div class="pipe">
+          <span class="n">问题</span><span class="a">→</span>
+          <span class="n star">IntentClassifier 规则优先</span><span class="a">→</span>
+          <span class="n">SearchRouter 映射表</span><span class="a">→</span>
+          <span class="n">查哪些库 / 权重</span>
+        </div>
+        <ul class="feat">
+          <li class="has"><span class="mk">✓</span> <b>意图路由</b>：规则/正则优先、LLM 兜底；按意图决定查哪些库与稀疏/稠密权重</li>
+          <li class="has"><span class="mk">✓</span> <b>社保结构化查表</b>：ShebaoAgent 直查社保缴费表，命中即作召回结果（结构化优先·跳过文档召回）</li>
+          <li class="has"><span class="mk">✓</span> <b>商品编码结构化查表</b>：ProductCodeAgent 直查税收分类编码表，文档 RAG 给不出的精确值由它补</li>
+          <li class="has"><span class="mk">✓</span> <b>多库联合召回</b>：政策 / 问答 / 文档 / 案例库可按意图组合召回</li>
+        </ul>
+        <p class="desc" style="margin-top:8px; margin-bottom:0;">说明：查表 Agent 是"召回的一路数据源"，不是平级子智能体——命中即作召回结果（结构化优先，跳过文档召回），统一进排序漏斗；无命中才回退文档 RAG。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ② 基线没有什么 -->
+  <section>
+    <div class="sec-head">
+      <span class="no">②</span>
+      <h2>相对当前项目，基线【尚未具备】的扩展点</h2>
+      <span class="tag">★ 这些是把"单一文档问答"撑成"多能力平台"的关键加法</span>
+    </div>
+    <p class="lead">基线的盲区集中在三类：① 结构化数仓的"自然语言查数"；② 多模态文档与对外工具化；③ 联网兜底与流式编排体验。以下是相对当前项目缺的部分。</p>
+    <div class="cards two">
+      <div class="card proj">
+        <h3><span class="badge proj">当前项目独有</span>查数 &amp; 工具化能力</h3>
+        <ul class="feat">
+          <li class="no"><span class="mk">✗</span> <b>Text2SQL / 数仓自然语言查询</b>：基线只会"在文档里找答案"，问不了"各省本月销售额"这类需要 SQL 聚合的数仓问题</li>
+          <li class="no"><span class="mk">✗</span> <b>多模态文档库</b>：基线偏纯文本；当前项目有文档 / 操作手册库槽位（解析含图片切分、图片入对象存储）</li>
+          <li class="no"><span class="mk">✗</span> <b>MCP 工具化对外</b>：基线只能"自己用"；当前项目把 税务问答 / 社保查询 / 编码查询 / 经营数据查询 暴露成 MCP 工具供外部调用</li>
+        </ul>
+      </div>
+      <div class="card proj">
+        <h3><span class="badge proj">当前项目独有</span>兜底 &amp; 编排体验</h3>
+        <ul class="feat">
+          <li class="no"><span class="mk">✗</span> <b>联网补充</b>：基线召回不到就只能说"资料不足"；当前项目有一条默认关、物理隔离的联网旁路兜底（结果绝不进权威引用）</li>
+          <li class="no"><span class="mk">✗</span> <b>SSE 双流编排</b>：基线常是"算完再返回"；当前项目 updates（意图/检索/引用/SQL 事件）+ messages（逐 token 答案）双流推送</li>
+          <li class="no"><span class="mk">✗</span> <b>LangGraph 主图 + 可替换子图</b>：当前项目用图编排，经营数据查询时整条 RAG 被 Text2SQL 子图替换、含 SQL 校正自环</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ③ 能力对比表 -->
+  <section>
+    <div class="sec-head">
+      <span class="no">③</span>
+      <h2>设计层能力对比表（维度 × 基线 vs 当前项目）</h2>
+      <span class="tag"><span class="pill both">共同基座</span>两者都有 &nbsp; <span class="pill only">★ 独有扩展</span>当前项目独有</span>
+    </div>
+    <div class="table-scroll">
+      <table class="cmp">
+        <thead>
+          <tr>
+            <th style="min-width:170px;">能力维度</th>
+            <th class="col-base" style="width:38%;">朴素 / 通用 RAG 基线</th>
+            <th class="col-proj" style="width:42%;">当前项目（多能力平台）</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="both-row">
+            <td class="dim">文档混合召回 <span class="pill both">共同</span></td>
+            <td class="base-cell"><span class="same">有</span>　dense（向量）+ sparse（BM25）按权重融合</td>
+            <td class="proj-cell"><span class="same">有</span>　同基座：稠密 1024 维 embedding + ES BM25，按意图配权重 + 归一化融合</td>
+          </tr>
+          <tr class="both-row">
+            <td class="dim">排序漏斗 <span class="pill both">共同</span></td>
+            <td class="base-cell"><span class="same">有</span>　粗排 → 精排 → 重排三级</td>
+            <td class="proj-cell"><span class="same">有</span>　同基座：RRF 粗排去重 → bge 精排 → 本地 bge-reranker-v2-m3 重排</td>
+          </tr>
+          <tr class="both-row">
+            <td class="dim">意图路由 <span class="pill both">共同</span></td>
+            <td class="base-cell"><span class="same">有</span>　按意图决定检索策略</td>
+            <td class="proj-cell"><span class="same">有</span>　同基座：确定性 IntentClassifier 规则优先 + SearchRouter 静态映射表（刻意不用 LLM supervisor）</td>
+          </tr>
+          <tr class="both-row">
+            <td class="dim">结构化查表 <span class="pill both">共同</span></td>
+            <td class="base-cell"><span class="same">有</span>　社保 / 商品编码直查表</td>
+            <td class="proj-cell"><span class="same">有</span>　同基座：ShebaoAgent / ProductCodeAgent 直查 MySQL，命中即作召回结果（结构化优先·跳过文档召回）</td>
+          </tr>
+          <tr class="only-row">
+            <td class="dim">Text2SQL 数仓查询 <span class="pill only">★ 独有</span></td>
+            <td class="base-cell"><span class="nope">无</span>　只能在文档里检索，无法对数仓做自然语言查数</td>
+            <td class="proj-cell"><span class="yes">有</span>　LangGraph 子图：schema_link（查 Qdrant）→ 生成 SQL → sqlglot AST 安全校验/修正自环 → 执行 MySQL → 数据解读</td>
+          </tr>
+          <tr class="only-row">
+            <td class="dim">多模态文档库 <span class="pill only">★ 独有</span></td>
+            <td class="base-cell"><span class="nope">无</span>　偏纯文本知识库</td>
+            <td class="proj-cell"><span class="yes">有</span>　文档 / 操作手册库（doc）：解析→切分→embedding 入 Milvus+ES，图片入 MinIO（MinerU 槽位）</td>
+          </tr>
+          <tr class="only-row">
+            <td class="dim">MCP 工具化对外 <span class="pill only">★ 独有</span></td>
+            <td class="base-cell"><span class="nope">无</span>　自包含、不对外暴露工具</td>
+            <td class="proj-cell"><span class="yes">有</span>　MCP server 暴露 税务问答 / 社保查询 / 商品编码查询 / 经营数据查询；client 经 streamable-http 调外部工具</td>
+          </tr>
+          <tr class="only-row">
+            <td class="dim">联网补充兜底 <span class="pill only">★ 独有</span></td>
+            <td class="base-cell"><span class="nope">无</span>　召回不到只能回退到"资料不足"</td>
+            <td class="proj-cell"><span class="yes">有</span>　默认关 · 物理隔离的联网旁路；确定性意图白名单触发，结果标"未核验·以官方为准"、绝不进权威引用</td>
+          </tr>
+          <tr class="only-row">
+            <td class="dim">SSE 双流编排 <span class="pill only">★ 独有</span></td>
+            <td class="base-cell"><span class="nope">无 / 弱</span>　典型为一次性返回或单一文本流</td>
+            <td class="proj-cell"><span class="yes">有</span>　FastAPI + SSE 双流：updates（意图/检索/引用/SQL 事件）+ messages（仅 generate_answer 逐 token）</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="lead" style="margin-top:10px;">读法：前四行是<b style="color:var(--blue);">共同基座</b>（基线与当前项目都有，当前项目把它做扎实并保留）；后五行是<b style="color:#8a6610;">★ 当前项目独有扩展点</b>。整张表比的是<b>能力是否覆盖</b>，不比快慢/准确率。</p>
+  </section>
+
+  <!-- ④ 扩展性叙事 -->
+  <section>
+    <div class="sec-head">
+      <span class="no">④</span>
+      <h2>扩展性叙事：从"单一文档问答"扩成"多能力平台"</h2>
+      <span class="tag">融合两套能力 + 加 MCP / 联网，是设计层的能力扩展，不是性能升级</span>
+    </div>
+    <p class="lead">当前项目并非"把基线调快了"，而是在同一套契约/编排框架下，<b>融合了两套不同形态的能力</b>，再补上对外工具化与联网兜底。</p>
+
+    <div class="fusion">
+      <div class="src-card">
+        <h4>① 多模态文档 RAG 能力</h4>
+        <div class="from">借鉴形态：掌柜智库（多模态文档 RAG）</div>
+        <p>面向政策/手册/图文文档的检索问答：文档解析（含图片）→切分→稠密+稀疏混合召回→三级排序→带引用生成。这一支正是与基线<b>重合的共同基座</b>，当前项目把它做实并保留。</p>
+      </div>
+      <div class="src-card" style="border-left-color:var(--proj);">
+        <h4>② Text2SQL / 数仓查询能力</h4>
+        <div class="from" style="color:var(--proj);">借鉴形态：掌柜问数（LangGraph Text2SQL 数仓查询）</div>
+        <p>面向结构化数仓的自然语言查数：schema 链接→生成只读 SELECT→AST 安全校验/报错回灌自环修正→执行→数据解读。这一支是<b>基线完全没有</b>的能力，作为可替换子图接入。</p>
+      </div>
+    </div>
+
+    <div class="plus">两套能力 ＋ 对外/兜底加法 ⟶ 同一平台</div>
+
+    <div class="add-grid">
+      <div class="add-item">
+        <div class="t">★ MCP 工具化对外</div>
+        <div class="d">把问答 / 社保 / 编码 / 经营数据查询暴露为 MCP 工具，平台从"自己用"变成"能力可被外部编排调用"。</div>
+      </div>
+      <div class="add-item">
+        <div class="t">★ 联网补充兜底</div>
+        <div class="d">默认关、物理隔离、确定性触发的联网旁路，本地召回不足时补来源；结果"未核验"、绝不进权威引用。</div>
+      </div>
+      <div class="add-item">
+        <div class="t">★ SSE 双流 + 图编排</div>
+        <div class="d">LangGraph 主图 + 可替换 Text2SQL 子图，updates / messages 双流推送，边算边吐、进度与引用即时可见。</div>
+      </div>
+    </div>
+
+    <div class="merge-box">
+      <h4>融合结果：一句话</h4>
+      <p style="margin:0; font-size:13px; color:#1f4d3c;">
+        当前项目在基线"文档混合召回 + 排序漏斗 + 意图路由 + 结构化查表"的共同基座之上，<b>融合掌柜智库（多模态文档 RAG）与掌柜问数（Text2SQL 数仓查询）两套能力</b>，再加上 <b>MCP 对外工具化</b>与<b>联网兜底</b>，由 <b>LangGraph 图编排 + SSE 双流</b>串起，从"单一文档问答"扩成覆盖<b>非结构化检索 + 结构化查数 + 工具化对外 + 联网补充</b>的多能力问答平台。
+      </p>
+      <div class="arrow-line">
+        <span class="stage from1">基线：文档问答（召回·排序·路由·查表）</span>
+        <span class="a" style="font-weight:800; color:var(--proj);">＋</span>
+        <span class="stage add">★ Text2SQL 数仓查询</span>
+        <span class="a" style="font-weight:800; color:var(--proj);">＋</span>
+        <span class="stage add">★ 多模态文档库</span>
+        <span class="a" style="font-weight:800; color:var(--proj);">＋</span>
+        <span class="stage add">★ MCP 对外</span>
+        <span class="a" style="font-weight:800; color:var(--proj);">＋</span>
+        <span class="stage add">★ 联网兜底</span>
+        <span class="a" style="font-weight:800; color:var(--proj);">＋</span>
+        <span class="stage add">★ SSE 双流编排</span>
+        <span class="a" style="font-weight:800; color:var(--proj);">＝</span>
+        <span class="stage" style="background:var(--proj); color:#fff; border-color:var(--proj); font-weight:800;">多能力问答平台</span>
+      </div>
+    </div>
+  </section>
+
+  <footer class="disc">
+    <b>对比口径声明：</b>本页所有对照均为<b>设计层 / 能力覆盖</b>层面的取舍说明，<b>不构成性能或效果对比</b>——双方均未做规模化评测（recall@k / 准确率 / QPS 等一律未做）。"基线"是对"一个现有单能力检索系统"的<b>通用形态描述，不点名、不指代任何具体产品、也不声称是其真实实现</b>。当前项目的技术事实以仓库代码与 <code>docs/e2e_验证报告.md</code> 为准（10 例 9 通、Text2SQL 出真实数字、社保/编码查表命中、RAG 三级漏斗 + citation、联网能力单独验证通过）。
+  </footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,133 @@
+# ============================================================================
+# tax_qa_platform 本地基础设施一键编排
+# 用法（在本文件所在目录）：
+#   docker compose up -d        # 后台拉起全部服务（首次会自动下载镜像，较慢）
+#   docker compose ps           # 看各服务状态
+#   docker compose logs -f es   # 看某个服务日志（把 es 换成服务名）
+#   docker compose down         # 停止并删除容器（数据保留在 volumes 里）
+#   docker compose down -v      # 连数据一起删（彻底重置）
+#
+# 端口/账号都对齐了项目的 .env 默认值，起来后无需改 .env 即可连通。
+# 资源建议：Docker Desktop 至少给 6~8GB 内存（Milvus + ES 较吃内存）。
+# 内存紧张时：只留 milvus(含 etcd/minio) + elasticsearch 也能跑通基础 RAG，
+#            其余 qdrant/mysql/mongo 用到 Text2SQL/会话/多模态时再开。
+# ============================================================================
+
+services:
+  # ---------- Milvus 的依赖①：etcd（存 Milvus 的元数据） ----------
+  etcd:
+    container_name: tax-milvus-etcd
+    image: quay.io/coreos/etcd:v3.5.5
+    environment:
+      - ETCD_AUTO_COMPACTION_MODE=revision
+      - ETCD_AUTO_COMPACTION_RETENTION=1000
+      - ETCD_QUOTA_BACKEND_BYTES=4294967296
+      - ETCD_SNAPSHOT_COUNT=50000
+    volumes:
+      - etcd_data:/etcd
+    command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # ---------- Milvus 的依赖②：MinIO（对象存储；同时被本项目复用来存文档图片） ----------
+  # 注意：这一个 MinIO 同时服务两件事：Milvus 内部存储 + 本项目多模态图片(桶 tax-doc-images)。
+  # 账号 minioadmin/minioadmin 与 .env 的 MINIO_ACCESS_KEY/SECRET_KEY 一致。
+  minio:
+    container_name: tax-minio
+    image: minio/minio:RELEASE.2023-03-20T20-16-18Z
+    environment:
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+    ports:
+      - "9000:9000"   # S3 API（.env: MINIO_ENDPOINT=localhost:9000）
+      - "9001:9001"   # Web 控制台（浏览器开 http://localhost:9001 ，账号 minioadmin/minioadmin）
+    volumes:
+      - minio_data:/minio_data
+    command: minio server /minio_data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # ---------- Milvus（稠密向量库，文档语义召回） ----------
+  milvus:
+    container_name: tax-milvus
+    image: milvusdb/milvus:v2.4.15
+    command: ["milvus", "run", "standalone"]
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: minio:9000
+    volumes:
+      - milvus_data:/var/lib/milvus
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 30s
+      start_period: 90s   # Milvus 首次启动慢，给足 90s 再判健康
+      timeout: 20s
+      retries: 3
+    ports:
+      - "19530:19530"   # gRPC（.env: MILVUS_HOST=localhost MILVUS_PORT=19530）
+      - "9091:9091"     # 健康/指标
+    depends_on:
+      - etcd
+      - minio
+
+  # ---------- Elasticsearch（全文/BM25 稀疏召回） ----------
+  elasticsearch:
+    container_name: tax-es
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+    environment:
+      - discovery.type=single-node        # 单节点，开发用
+      - xpack.security.enabled=false       # 关掉安全认证，本地省事（.env 的 ES_USER/PASSWORD 留空即可）
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g         # 堆内存限制 1G，避免吃光内存；机器够大可调大
+    ports:
+      - "9200:9200"   # .env: ES_HOSTS=http://localhost:9200
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+
+  # ---------- Qdrant（数仓元数据向量库，Text2SQL schema linking 用） ----------
+  qdrant:
+    container_name: tax-qdrant
+    image: qdrant/qdrant:v1.9.0
+    ports:
+      - "6333:6333"   # HTTP（.env: QDRANT_HOST=localhost QDRANT_PORT=6333）
+      - "6334:6334"   # gRPC
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  # ---------- MySQL（docker 容器；映射到本机 13306，避开本机已占用的 3306） ----------
+  # 容器内部仍是 3306，对外映射成 13306。所以 .env 里要写 MYSQL_PORT=13306。
+  mysql:
+    container_name: tax-mysql
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: your_mysql_pwd   # 与 .env 的 MYSQL_PASSWORD 一致；改这里也要改 .env
+      MYSQL_DATABASE: tax_dw                # 启动自动建库，与 .env 的 MYSQL_DB 一致
+    ports:
+      - "13306:3306"                        # 本机 13306 → 容器 3306（.env: MYSQL_PORT=13306）
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  # ---------- MongoDB（多轮会话历史） ----------
+  mongo:
+    container_name: tax-mongo
+    image: mongo:7
+    ports:
+      - "27017:27017"   # .env: MONGO_URI=mongodb://localhost:27017（默认无认证）
+    volumes:
+      - mongo_data:/data/db
+
+# 命名卷：数据持久化在 Docker 管理的卷里，down 不丢、down -v 才删。
+volumes:
+  etcd_data:
+  minio_data:
+  milvus_data:
+  es_data:
+  qdrant_data:
+  mysql_data:
+  mongo_data:
