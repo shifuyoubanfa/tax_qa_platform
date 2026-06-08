@@ -260,8 +260,9 @@
       <div class="card proj">
         <h3><span class="badge proj">当前项目独有</span>兜底 &amp; 编排体验</h3>
         <ul class="feat">
+          <li class="no"><span class="mk">✗</span> <b>可答性门控</b>：基线把漏斗挑出的 top-k 无条件喂给 LLM，库里没相关内容时照样"看图说话"硬凑带文号/数字的幻觉；当前项目在重排后加一道<b>确定性阈值门控</b>——重排 top1 相关性分过低/空召回就<b>不喂弱证据</b>、直接诚实兜底（不调 LLM）</li>
           <li class="no"><span class="mk">✗</span> <b>联网补充</b>：基线召回不到就只能说"资料不足"；当前项目有一条默认关、物理隔离的联网旁路兜底（结果绝不进权威引用）</li>
-          <li class="no"><span class="mk">✗</span> <b>SSE 双流编排</b>：基线常是"算完再返回"；当前项目 updates（意图/检索/引用/SQL 事件）+ messages（逐 token 答案）双流推送</li>
+          <li class="no"><span class="mk">✗</span> <b>SSE 双流编排</b>：基线常是"算完再返回"；当前项目 updates（意图/检索/可答性/引用/SQL 事件）+ messages（逐 token 答案）双流推送</li>
           <li class="no"><span class="mk">✗</span> <b>LangGraph 主图 + 可替换子图</b>：当前项目用图编排，经营数据查询时整条 RAG 被 Text2SQL 子图替换、含 SQL 校正自环</li>
         </ul>
       </div>
@@ -294,6 +295,11 @@
             <td class="dim">排序漏斗 <span class="pill both">共同</span></td>
             <td class="base-cell"><span class="same">有</span>　粗排 → 精排 → 重排三级</td>
             <td class="proj-cell"><span class="same">有</span>　同基座：RRF 粗排去重 → bge 精排 → 本地 bge-reranker-v2-m3 重排</td>
+          </tr>
+          <tr>
+            <td class="dim">可答性门控 <span class="pill only">★ 独有</span></td>
+            <td class="base-cell"><span class="nope">无</span>　漏斗 top-k 无条件喂给 LLM，无相关内容时易"看图说话"产生幻觉</td>
+            <td class="proj-cell"><span class="yes">有</span>　重排后加确定性阈值门控：top1 相关性分（sigmoid [0,1]）≥ 阈值才生成，过低/空召回转诚实兜底（不调 LLM）；含 fp16 sigmoid 下溢与"重排降级"的消歧处理</td>
           </tr>
           <tr class="both-row">
             <td class="dim">意图路由 <span class="pill both">共同</span></td>

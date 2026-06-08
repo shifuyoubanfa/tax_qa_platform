@@ -29,7 +29,8 @@
   最后逐 token 推"答案"。前端可即时渲染进度条与引用卡片。
 - SSE 消息格式由 `app/utils/sse.py::format_sse(event, data)` 统一生成
   （`event: x\ndata: {json}\n\n`），事件类型固定在 `SSEEvent` 枚举里：
-  `intent / retrieval / references / sql / answer_delta / done / error`。
+  `intent / retrieval / answerability / references / sql / answer_delta / done / error`
+  （`answerability` 透出"可答性门控"结论，见 §6.4）。
 - 入口层只做"取请求 → 调 `Orchestrator.astream` → 把每个 `SSEMessage` 格式化下发"，**不含业务逻辑**，
   保证关注点分离。
 
@@ -46,7 +47,8 @@
   2. 可控：能在节点间做**条件分支**（路由到 RAG 还是 Text2SQL）、**循环**（SQL 校正重试）。
   3. 可观测：每个节点进出都打日志（命中意图、召回数量、排序结果数、SQL、异常），排错快。
 - `GraphState`（见 `app/graph/state.py`）用 `total=False` 让所有字段可选，节点**逐步填充**：
-  输入 `query` → `qu`（理解结果）→ `plan`（检索计划）→ `recalled/ranked/reranked` → `context/references`
+  输入 `query` → `qu`（理解结果）→ `plan`（检索计划）→ `recalled/ranked/reranked`
+  → `answerable/answer_confidence`（可答性门控，见 §6.4）→ `context/references`
   →（或 `text2sql_result`）→ `answer`。
 - `Orchestrator.astream(req)` 是对外的异步生成器：驱动图执行，并在关键节点产出 `SSEMessage` 流。
 
@@ -150,7 +152,34 @@
   但太慢、只能用于少量候选。所以工程上是"前面用 bi-encoder 快速筛到几十条 → 最后用 cross-encoder 精排到 5 条"，
   兼顾速度与精度。这正是 RAG 检索质量的分水岭。
 
-> 漏斗一句话总结：**召回(50) 求全 → 粗排(RRF 去重) 融合 → 精排(bge) 提纯 → 重排(cross-encoder, 5) 定稿**。
+> 漏斗一句话总结：**召回(50) 求全 → 粗排(RRF 去重) 融合 → 精排(bge) 提纯 → 重排(cross-encoder, 5) 定稿
+> → 可答性门控(够不够答)**。
+
+### 6.4 可答性门控 `answerability_check`（漏斗出口的"能不能答"判定）
+**位置**：`app/graph/nodes.py::answerability_check` + `answerability_decider`（条件边），阈值在 `config/settings.py`。
+
+- **解决什么问题？** 漏斗只负责"把召回里相对最相关的 5 条挑出来"，但**不保证这 5 条真的相关**。
+  如果用户问的东西库里根本没有，漏斗照样会返回 5 条"矮子里拔将军"的弱证据；若照常喂给 LLM 生成，
+  模型会"看图说话"硬凑一个**带文号、带数字、却没有依据**的答案——这是财税场景最危险的幻觉。
+- **怎么判？** 重排用的 cross-encoder 已经给每条候选打了 **[0,1] 的相关性分**（sigmoid 归一）。
+  取重排 top1 分作主信号，与 `answerability_min_score`（默认 0.15）比：
+  - **≥ 阈值 → 判"可答"**：条件边走原链路 `build_context → generate_answer`，行为完全不变；
+  - **< 阈值 / 空召回 → 判"不可答"**：转 `low_confidence_answer` 节点，**不调 LLM**、直接给一句诚实兜底话术
+    （"未检索到足够相关的权威依据，建议补充文号/政策名/地域……"），从源头杜绝"没依据也硬答"。
+- **为什么是确定性阈值、而不是再问一次 LLM？** 与本系统"确定性路由层"（见 [能力地图.md](能力地图.md) §1）
+  一脉相承：这种高频、对延迟敏感、错一次就放幻觉出去的关键岔口，用**可单测、可复现、零额外 token** 的
+  阈值判定，比把它交给又慢又不可复现的 LLM 黑盒更稳。
+- **一个隐藏的工程坑（值得记）**：重排客户端用 **fp16 + sigmoid**，对**极不相关**样本（logit ≲ -17）会
+  **下溢成恰好 0.0**；而重排服务**降级**（未真正打分）时分数也是默认 0.0。两者都为 0.0 就**无法区分**——
+  会把"极强不相关的真低分"误判成"重排降级"而**错误放行**（fail-open，恰好与门控目标相反）。
+  解法：`ReRanker` 成功打分时把结果**钳到一个极小正数** `_SCORED_FLOOR`(1e-6)，让"成功打分"恒 > 0、
+  "未打分"恒 = 0.0，`0.0` 被**独占**用来表示降级，二者彻底解耦（见 `app/core/rerank/rerank.py`）。
+  降级时（分数全 0）改用"候选数"这一弱信号判定，**宁放行不误杀**。
+- **可观测**：门控结论以 `answerability` SSE 事件透出（`answerable / confidence / signals`），
+  前端在时间线上对"判不可答"打一枚"依据不足·诚实兜底"角标（只呈现门控自身字段，**不编造任何指标**）。
+
+> 这一环对标企业财税客服系统里的「问答库可答判断（阈值 + 大模型 + 规则）」环节——本实现取其"确定性阈值"
+> 内核、并刻意**不引入 LLM 裁决**，与系统整体设计立场一致。
 
 ---
 
@@ -226,8 +255,9 @@
 
 ## 12. 一句话回顾全链路
 
-> **理解(QU) → 路由(意图表) → 召回(dense+sparse 多库) → 粗排(RRF) → 精排(bge) → 重排(cross-encoder) → 摘要(带引用)**，
-> 若是"查数据"则改走 **Text2SQL（选 schema → 生成 SQL → 报错校正 → 执行 → 解读）**，
+> **理解(QU) → 路由(意图表) → 召回(dense+sparse 多库) → 粗排(RRF) → 精排(bge) → 重排(cross-encoder)
+> → 可答性门控(够不够答) → 摘要(带引用)**，若是"查数据"则改走
+> **Text2SQL（选 schema → 生成 SQL → 报错校正 → 执行 → 解读）**，
 > 全程由 **LangGraph** 编排、**SSE** 流式吐给前端，所有外部依赖**惰性连接、配置驱动**。
 
 把这条链路吃透，你就掌握了一套可迁移到任何垂直领域的 RAG + Text2SQL 工程范式。

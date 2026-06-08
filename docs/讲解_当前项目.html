@@ -268,11 +268,14 @@
               <span class="fstage">召回</span><span class="arr">→</span>
               <span class="fstage">RRF 粗排</span><span class="arr">→</span>
               <span class="fstage">bge 精排</span><span class="arr">→</span>
-              <span class="fstage">★ bge-reranker 重排</span>
+              <span class="fstage">★ bge-reranker 重排</span><span class="arr">→</span>
+              <span class="fstage">★ 可答性门控</span>
             </div>
-            <div class="step"><span class="n">2</span> build_context（拼上下文，分配 [[citation:N]]）</div>
-            <div class="step"><span class="n">3</span> ★ generate_answer（LLM <b>逐 token 流式</b>）</div>
+            <div class="step"><span class="n">2</span> ★ answerability_check（重排 top1 分 ≥ 阈值? <b>确定性可答性门控</b>）：可答→生成；不可答→诚实兜底（不调 LLM）</div>
+            <div class="step"><span class="n">3</span> build_context（拼上下文，分配 [[citation:N]]）</div>
+            <div class="step"><span class="n">4</span> ★ generate_answer（LLM <b>逐 token 流式</b>）</div>
             <p class="note">权重示例：精确法规 dense 0.05/sparse 0.95；通用问答 dense 0.95/sparse 0.05（经验沉淀，写死在路由表）。</p>
+            <p class="note">可答性门控：漏斗只挑出"相对最相关"的 5 条、不保证<b>真</b>相关；门控用重排 cross-encoder 的 [0,1] 相关性分卡阈值（默认 0.15），过低/空召回则<b>不喂弱证据给 LLM</b>、直接给诚实兜底，从源头防"没依据也硬答"的幻觉。确定性判定（非 LLM 裁决），与确定性路由层一脉相承。</p>
           </div>
         </div>
 
@@ -287,10 +290,10 @@
         <div class="grp-title" style="margin-top:4px">SSE 双流事件（stream_mode = ["updates","messages"]）</div>
         <div class="sse">
           <span class="ev">intent</span><span class="ev">retrieval(recall/coarse/fine/rerank)</span>
-          <span class="ev">references</span><span class="ev">sql</span>
+          <span class="ev">answerability</span><span class="ev">references</span><span class="ev">sql</span>
           <span class="ev">answer_delta（逐 token）</span><span class="ev">done</span><span class="ev">error</span>
         </div>
-        <p class="note">updates 流 → intent/retrieval/references/sql 事件；messages 流 → 仅 <code>generate_answer</code> 节点的 LLM token 逐个产出 answer_delta（Text2SQL 结论为伪流式切块）。顶层 try/except 兜底，异常统一转 error 事件优雅收尾。</p>
+        <p class="note">updates 流 → intent/retrieval/<b>answerability</b>/references/sql 事件；messages 流 → 仅 <code>generate_answer</code> 节点的 LLM token 逐个产出 answer_delta（Text2SQL 结论与"不可答兜底"为伪流式切块）。顶层 try/except 兜底，异常统一转 error 事件优雅收尾。</p>
       </div>
 
     </div>
