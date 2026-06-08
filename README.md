@@ -141,7 +141,7 @@ tax_qa_platform/
 
 ---
 
-## 5. 明天怎么把它跑通（运行手册）
+## 5. 怎么把它跑通（运行手册）
 
 > 目标：从零到 `curl /api/v1/chat` 拿到流式回答。下面以 Linux/macOS 为例；
 > Windows 用 PowerShell 时把激活命令换成 `.venv\Scripts\Activate.ps1` 即可。
