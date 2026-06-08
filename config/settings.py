@@ -164,6 +164,16 @@ class Settings(BaseSettings):
     fine_topk: int = 20                # 精排后保留条数
     rerank_topk: int = 5               # 重排后最终保留条数
 
+    # ============== 可答性门控（RAG 生成前的"能不能答"判定，确定性阈值，默认开） ==============
+    # 在链路里的位置：rerank 之后、build_context/generate_answer 之前的一道【确定性门控】。
+    # 动机（对标企业财税客服「问答库可答判断」环节）：重排(cross-encoder)已给候选打了 [0,1] 相关性分；
+    # 若 top1 仍很低，说明召回里没有真正相关的权威依据——此时若照常喂给 LLM 生成极易"看图说话"幻觉。
+    # 故在生成前按阈值判"够不够答"：够 -> 照常生成；不够 -> 转诚实兜底话术(不调 LLM、零编造)。
+    # 注意（如实）：下列阈值为【保守经验默认值】，非大规模标注评测标定所得；可经 .env 按真实数据调参。
+    answerability_enabled: bool = True       # 总开关：True 时在 rerank 后做可答性门控（默认开）
+    answerability_min_score: float = 0.15    # 重排 top1 分(sigmoid归一[0,1]) < 此值 => 判不可答，走诚实兜底
+    answerability_min_docs: int = 1          # 重排降级(分数全0不可信)时改用"重排候选数 >= 此值"兜底判可答
+
     @property
     def mysql_dsn(self) -> str:
         """组装 SQLAlchemy 异步连接串（aiomysql 驱动）。

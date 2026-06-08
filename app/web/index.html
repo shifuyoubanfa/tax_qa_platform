@@ -180,6 +180,9 @@ body{margin:0;background:var(--bg);color:var(--text-1);font-family:var(--font-sa
 /* 意图徽章 */
 .intent-badge{display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-xs);font-weight:var(--fw-semibold);
   background:var(--brand-50);color:var(--brand-600);padding:2px var(--sp-2);border-radius:var(--radius-pill);}
+/* 可答性门控"依据不足"角标：橙色提示色，与意图徽章并排出现在时间线头部，仅判不可答时显示。 */
+.timeline-head .answerability-badge{margin-left:8px;}
+.answerability-badge{background:#fff4e5;color:#b3541e;cursor:help;}
 
 /* —— ② 答案正文（打字机 + Markdown） —— */
 .answer{font-size:var(--fs-body);line-height:var(--lh-body);color:var(--text-1);word-break:break-word;}
@@ -681,13 +684,15 @@ class AiTurn {
   // ---- 事件入口（reducer）：每个事件更新状态后触发对应区域重绘 ----
   onEvent(event, data){
     switch(event){
-      case 'intent':       this._onIntent(data); break;
-      case 'retrieval':    this._onRetrieval(data); break;
-      case 'references':   this._onReferences(data); break;
-      case 'sql':          this._onSql(data); break;
-      case 'answer_delta': this._onAnswerDelta(data); break;
-      case 'done':         this._onDone(data); break;
-      case 'error':        this._onError(data); break;
+      case 'intent':        this._onIntent(data); break;
+      case 'retrieval':     this._onRetrieval(data); break;
+      case 'answerability': this._onAnswerability(data); break;
+      case 'references':    this._onReferences(data); break;
+      case 'sql':           this._onSql(data); break;
+      case 'answer_delta':  this._onAnswerDelta(data); break;
+      case 'done':          this._onDone(data); break;
+      case 'error':         this._onError(data); break;
+      default:              console.debug('[SSE] 未处理事件类型', event, data);
     }
   }
 
@@ -700,6 +705,15 @@ class AiTurn {
 
   _onRetrieval(d){
     if(d && d.stage){ this.steps[d.stage] = d.count; this._markStepActive(d.stage); }
+    this._renderTimeline();
+  }
+
+  _onAnswerability(d){
+    // 可答性门控结论（重排后、生成前的确定性判定）。只如实呈现门控【自身】的字段，
+    // 不编造任何召回率/准确率指标——尊重项目诚信红线。answerable=false 时在时间线打一枚"依据不足"角标。
+    this.answerable = (d && d.answerable !== false);
+    this.answerConfidence = (d && typeof d.confidence === 'number') ? d.confidence : null;
+    this.answerabilitySignals = (d && d.signals) || {};
     this._renderTimeline();
   }
 
@@ -811,6 +825,7 @@ class AiTurn {
       t.innerHTML='';
       const head=el('div','timeline-head', '<span class="caret">▾</span><span>'+summary+'</span>');
       if(this.intent) head.appendChild(this._intentBadge());
+      if(this.answerable===false) head.appendChild(this._answerabilityBadge());
       head.onclick=()=>{ this.timelineCollapsed=false; this._renderTimeline(); };
       t.appendChild(head);
       return;
@@ -821,6 +836,7 @@ class AiTurn {
     const head=el('div','timeline-head');
     head.innerHTML='<span class="caret">▾</span><span>检索进度</span>';
     if(this.intent) head.appendChild(this._intentBadge());
+    if(this.answerable===false) head.appendChild(this._answerabilityBadge());
     head.onclick=()=>{ t.classList.toggle('collapsed'); };
     t.appendChild(head);
 
@@ -854,6 +870,17 @@ class AiTurn {
 
   _intentBadge(){
     const b=el('span','intent-badge'); b.textContent = this.intent; return b;
+  }
+
+  _answerabilityBadge(){
+    // 仅在"判不可答"时出现：如实展示门控自身结论与置信度（无任何编造指标）。
+    const b=el('span','intent-badge answerability-badge');
+    b.textContent = '依据不足·诚实兜底';
+    const c = (typeof this.answerConfidence==='number') ? this.answerConfidence.toFixed(3) : 'n/a';
+    const thr = (this.answerabilitySignals && this.answerabilitySignals.threshold!=null)
+      ? this.answerabilitySignals.threshold : '—';
+    b.title = '可答性门控判定：依据不足（重排 top1 相关性分 '+c+' < 阈值 '+thr+'），已转诚实兜底而非硬作答';
+    return b;
   }
 
   _collapseTimeline(){ this.timelineCollapsed=true; this._renderTimeline(); }

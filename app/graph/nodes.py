@@ -15,6 +15,7 @@ pipeline.py 再把这些节点连成图。
 """
 from __future__ import annotations
 
+import math
 from typing import Optional
 
 from config.constants import Intent, RouteType
@@ -287,6 +288,95 @@ async def rerank(state: GraphState) -> dict:
     return {"reranked": reranked}
 
 
+async def answerability_check(state: GraphState) -> dict:
+    """节点（RAG分支·重排后·生成前）：可答性门控——用重排分判断"够不够答"，不够就不把弱证据喂给 LLM。
+
+    动机（对标企业财税客服的「问答库可答判断」环节）：重排(cross-encoder)已对候选给出 [0,1] 相关性分。
+    若 top1 仍很低，说明召回里没有真正相关的权威依据；此时若照常把弱证据喂给 LLM 生成，极易"看图说话"
+    产生幻觉。这里在生成前加一道【确定性阈值门控】（与本系统"确定性路由层"一脉相承，不引入 LLM 裁决）：
+      - top1 分 >= 阈值 -> 判"可答" -> 条件边走 build_context -> generate_answer（原链路不变）；
+      - top1 分 <  阈值 -> 判"不可答" -> 条件边走 low_confidence_answer 给诚实兜底（不调 LLM、零编造）。
+
+    信号与降级（健壮性，宁放行不误杀）：
+      - 主信号：重排候选里最高的 rerank_score（reranker_client 已 sigmoid 归一到 [0,1]）。
+      - 重排降级兜底：重排客户端异常时 ReRanker 会回退为"按上一阶段 score 排序"且【不写 rerank_score】
+        （全为默认 0.0）。此时分数不可信 -> 改用"候选数 >= answerability_min_docs"这一弱信号判定，
+        避免因重排服务抖动把本可回答的问题误杀成不可答。
+      - 空候选：直接判不可答（empty_recall）。
+      - 总开关 answerability_enabled=False：整段跳过、恒判可答，行为与未引入门控时完全一致。
+
+    :param state: 全局状态（读 reranked / qu）。
+    :return: {"answerable": bool, "answer_confidence": float, "answerability": dict}。
+    """
+    docs = state.get("reranked", []) or []
+    intent = getattr(state.get("qu", None), "intent", None)
+
+    # 总开关关：恒判可答，完全保留未引入门控时的原行为（空上下文仍由 generate_answer 内部兜底）
+    if not settings.answerability_enabled:
+        logger.info("[节点:answerability_check] 门控关闭 -> 恒判可答（行为同未引入门控）")
+        return {"answerable": True, "answer_confidence": 1.0,
+                "answerability": {"enabled": False, "intent": intent}}
+
+    doc_count = len(docs)
+    # 主信号：最高重排分。reranked 已按 rerank_score 降序，但用 max 更稳（不依赖排序假设）。
+    # 收敛 NaN/inf 为 0.0：避免异常分数污染 max 与置信度（正常 sigmoid 路径不会触发，纯防御）。
+    scores = []
+    for d in docs:
+        v = float(getattr(d, "rerank_score", 0.0))
+        scores.append(v if math.isfinite(v) else 0.0)
+    max_score = max(scores, default=0.0)
+    # 重排降级探测：有候选但最高分仍 <= 0 -> rerank_score 不可信（重排服务回退/未真正打分）。
+    # 注：ReRanker 成功打分会把结果钳到 _SCORED_FLOOR(>0)，故"恰好 0.0"只可能来自"未打分"，
+    # 不会把极强不相关的真低分误判成降级（详见 app/core/rerank/rerank.py 的 _SCORED_FLOOR）。
+    rerank_degraded = doc_count > 0 and max_score <= 0.0
+
+    if doc_count == 0:
+        answerable, confidence, reason = False, 0.0, "empty_recall"
+    elif rerank_degraded:
+        # 分数不可信 -> 用候选数兜底判定，宁放行不误杀
+        answerable, confidence, reason = (
+            doc_count >= settings.answerability_min_docs, 0.0, "rerank_degraded_doc_count")
+    else:
+        answerable, confidence, reason = (
+            max_score >= settings.answerability_min_score, max_score, "rerank_score")
+
+    signals = {
+        "enabled": True,
+        "intent": intent,
+        "doc_count": doc_count,
+        "top_rerank_score": round(max_score, 4),
+        "threshold": settings.answerability_min_score,
+        "rerank_degraded": rerank_degraded,
+        "reason": reason,
+    }
+    logger.info("[节点:answerability_check] 可答=%s 置信=%.4f 候选=%d 依据=%s（阈值=%.2f）",
+                answerable, confidence, doc_count, reason, settings.answerability_min_score)
+    return {"answerable": bool(answerable), "answer_confidence": round(float(confidence), 4),
+            "answerability": signals}
+
+
+async def low_confidence_answer(state: GraphState) -> dict:
+    """节点（RAG分支·可答性门控判"不可答"时的终点）：给出诚实兜底话术，不调 LLM、零编造。
+
+    为什么不调 LLM：既然判为"召回里没有足够相关的权威依据"，再让 LLM 基于弱证据生成只会冒充权威、
+    制造幻觉。这里直接产出一句诚实、可执行的引导话术（建议补充文号/政策名/地域），既守住"不编造"红线，
+    又给用户下一步指引；零 token、零外部依赖。措辞按门控依据区分"空召回"与"弱相关"两种情形。
+
+    :param state: 全局状态（读 answerability 信号里的 reason，决定措辞）。
+    :return: {"answer": str}。
+    """
+    signals = state.get("answerability", {}) or {}
+    reason = signals.get("reason", "")
+    if reason == "empty_recall":
+        answer = ("抱歉，未检索到与您问题直接相关的资料，暂时无法给出准确回答。"
+                  "建议补充关键信息（如具体文号、政策名称、所属地域）后再试。")
+    else:
+        answer = ("抱歉，仅检索到与您问题相关性较低的资料，为避免给出不准确的回答，这里不做硬性作答。"
+                  "建议补充关键信息（如具体文号、政策名称、所属地域），或换一种更具体的问法后再试。")
+    logger.info("[节点:low_confidence_answer] 触发诚实兜底（reason=%s）", reason or "(空)")
+    return {"answer": answer}
+
+
 async def build_context(state: GraphState) -> dict:
     """节点：按意图把重排文档拼成上下文并产出引用，写入 state.context / state.references。
 
@@ -374,6 +464,19 @@ def route_decider(state: GraphState) -> str:
     rt = state.get("route_type", RouteType.RAG.value)
     decision = "text2sql" if rt == RouteType.TEXT2SQL.value else "rag"
     logger.info("[条件边:route_decider] route_type=%s -> %s", rt, decision)
+    return decision
+
+
+def answerability_decider(state: GraphState) -> str:
+    """条件边：answerability_check 之后，按可答性结论在 RAG 链路内二次分流。
+
+    :param state: 全局状态（读 answerable）。
+    :return: "answer"（可答 -> build_context -> generate_answer 原链路） /
+             "insufficient"（不可答 -> low_confidence_answer 诚实兜底）。
+    """
+    answerable = bool(state.get("answerable", True))
+    decision = "answer" if answerable else "insufficient"
+    logger.info("[条件边:answerability_decider] answerable=%s -> %s", answerable, decision)
     return decision
 
 

@@ -15,11 +15,21 @@
 """
 from __future__ import annotations
 
+import math
+
 from config.logging_config import get_logger
 from app.schemas.document import Document
 from app.utils.timing import runtime
 
 logger = get_logger(__name__)
+
+# "成功打分"的下限钳值：保证经过重排模型成功打分的文档 rerank_score 恒 > 0。
+# 为什么需要（与下游"可答性门控"解耦）：bge-reranker 用 fp16 + sigmoid(normalize=True)，对【极不相关】
+# 样本(logit≲-17)会下溢为【恰好 0.0】；而重排客户端异常【降级】时(见 rerank 的 except 分支)文档 rerank_score
+# 保持默认 0.0(根本没打分)。两者都为 0.0 则无法区分——下游 answerability_check 会把"极强不相关的真低分"
+# 误判成"重排降级"而错误放行(fail-open，恰与门控目标相反)。把成功打分的结果钳到 _SCORED_FLOOR 后：
+# "成功打分"恒 ∈ [1e-6, 1]、"未打分"恒 = 0.0，0.0 被独占用于表示降级，二者彻底解耦。
+_SCORED_FLOOR = 1e-6
 
 
 class ReRanker:
@@ -75,9 +85,12 @@ class ReRanker:
             result = sorted(docs, key=lambda d: d.score, reverse=True)[:topk]
             return result
 
-        # 把相关性分写入 rerank_score，并据此排序
+        # 把相关性分写入 rerank_score，并据此排序。
+        # 钳到 _SCORED_FLOOR 并收敛 NaN/inf：成功打分恒为有限正数(>0)，与"降级·未打分(0.0)"区分，
+        # 让下游可答性门控能可靠识别"重排降级"而不误杀极强不相关的真低分（见 _SCORED_FLOOR 注释）。
         for d, s in zip(docs, scores or []):
-            d.rerank_score = float(s)
+            sv = float(s)
+            d.rerank_score = sv if (math.isfinite(sv) and sv > _SCORED_FLOOR) else _SCORED_FLOOR
         ranked = sorted(docs, key=lambda d: d.rerank_score, reverse=True)
         result = ranked[:topk]
         logger.info("重排完成: 返回 %s 条 (top1 rerank_score=%.4f)",

@@ -38,8 +38,14 @@ def build_pipeline_graph():
     图结构::
 
         START -> load_memory -> understand -> route
-        route --(rag)--> rag_recall -> coarse_rank -> fine_rank -> rerank -> build_context -> save_memory -> END
+        route --(rag)--> rag_recall -> coarse_rank -> fine_rank -> rerank -> answerability_check
+        answerability_check --(answer)--> build_context -> generate_answer -> save_memory -> END
+        answerability_check --(insufficient)--> low_confidence_answer -> save_memory -> END
         route --(text2sql)--> text2sql -> save_memory -> END
+
+    可答性门控（answerability_check）：重排后、生成前的一道【确定性】二次分流——重排 top1 相关性分
+    够高才走原 build_context->generate_answer 链路；过低则转 low_confidence_answer 给诚实兜底（不调 LLM），
+    避免把弱证据喂给 LLM 产生幻觉。与"确定性路由层"一脉相承，不引入 LLM 裁决（详见 nodes.answerability_check）。
 
     说明：该图用于"非流式整体执行 / 可视化 / smoke 测试拓扑"。流式对外服务走 Orchestrator.astream。
 
@@ -58,8 +64,10 @@ def build_pipeline_graph():
     builder.add_node("coarse_rank", nodes.coarse_rank)
     builder.add_node("fine_rank", nodes.fine_rank)
     builder.add_node("rerank", nodes.rerank)
+    builder.add_node("answerability_check", nodes.answerability_check)  # 可答性门控（重排后/生成前）
     builder.add_node("build_context", nodes.build_context)
     builder.add_node("generate_answer", nodes.generate_answer)   # RAG 答案生成（LLM 流式）
+    builder.add_node("low_confidence_answer", nodes.low_confidence_answer)  # 不可答时的诚实兜底（不调LLM）
     builder.add_node("text2sql", nodes.text2sql)
     builder.add_node("save_memory", nodes.save_memory)
 
@@ -75,13 +83,21 @@ def build_pipeline_graph():
         {"rag": "rag_recall", "text2sql": "text2sql"},
     )
 
-    # RAG 链路：召回 -> 粗排 -> 精排 -> 重排 -> 建上下文 -> 存记忆
+    # RAG 链路：召回 -> 粗排 -> 精排 -> 重排 -> 可答性门控
     builder.add_edge("rag_recall", "coarse_rank")
     builder.add_edge("coarse_rank", "fine_rank")
     builder.add_edge("fine_rank", "rerank")
-    builder.add_edge("rerank", "build_context")
+    builder.add_edge("rerank", "answerability_check")
+
+    # 可答性门控后条件分流：可答 -> 建上下文->生成；不可答 -> 诚实兜底（不调 LLM）
+    builder.add_conditional_edges(
+        "answerability_check",
+        nodes.answerability_decider,
+        {"answer": "build_context", "insufficient": "low_confidence_answer"},
+    )
     builder.add_edge("build_context", "generate_answer")
     builder.add_edge("generate_answer", "save_memory")
+    builder.add_edge("low_confidence_answer", "save_memory")
 
     # Text2SQL 链路：执行 Agent -> 存记忆
     builder.add_edge("text2sql", "save_memory")
@@ -195,6 +211,13 @@ class Orchestrator:
         elif node_name == "rerank":
             return [SSEMessage(event=E.RETRIEVAL.value,
                                data={"stage": "rerank", "count": len(update.get("reranked") or [])})]
+        elif node_name == "answerability_check":
+            # 可答性门控结论：把"够不够答 + 置信度 + 信号明细"透出，前端可据此提示用户/观测降级
+            return [SSEMessage(event=E.ANSWERABILITY.value, data={
+                "answerable": bool(update.get("answerable", True)),
+                "confidence": update.get("answer_confidence", 0.0),
+                "signals": update.get("answerability") or {},
+            })]
         elif node_name == "build_context":
             return [SSEMessage(event=E.REFERENCES.value,
                                data={"references": update.get("references") or []})]
@@ -217,6 +240,10 @@ class Orchestrator:
             if not answer_streamed:
                 return [SSEMessage(event=E.ANSWER_DELTA.value, data={"text": piece})
                         for piece in _chunk_text(update.get("answer") or "", size=24)]
+        elif node_name == "low_confidence_answer":
+            # 不可答兜底：诚实话术非 LLM token 流，这里切块"伪流式"产出，保证答案逐段到达前端
+            return [SSEMessage(event=E.ANSWER_DELTA.value, data={"text": piece})
+                    for piece in _chunk_text(update.get("answer") or "", size=24)]
         return []
 
 

@@ -114,10 +114,24 @@ class _FakeFineRanker:
 
 
 class _FakeReRanker:
-    """假重排：原样透传（不调 RerankerClient）。"""
+    """假重排：原样透传（不调 RerankerClient）。
+
+    注意：透传后各 doc 的 rerank_score 仍为默认 0.0（未真正打分）——这正是"重排降级"形态。
+    可答性门控对此有兜底：分数全 0 时改用"候选数"判定，故仍判【可答】，走原 build_context->generate。
+    """
 
     def rerank(self, query: str, docs: list[Document], topk: int) -> list[Document]:
         return list(docs)[:topk]
+
+
+class _FakeReRankerLow:
+    """假重排（低分版）：给每条候选打一个低于可答阈值(默认0.15)的 rerank_score，触发"不可答"分支。"""
+
+    def rerank(self, query: str, docs: list[Document], topk: int) -> list[Document]:
+        out = list(docs)[:topk]
+        for d in out:
+            d.rerank_score = 0.02  # < answerability_min_score(0.15) -> 判不可答
+        return out
 
 
 class _FakeSummarizer:
@@ -237,6 +251,7 @@ def test_rag_branch_sse_sequence(monkeypatch):
     # 1) 事件类型齐全：意图 / 检索进度 / 引用 / 答案增量 / 结束都在
     assert SSEEvent.INTENT.value in events, f"缺少 intent 事件：{events}"
     assert SSEEvent.RETRIEVAL.value in events, f"缺少 retrieval 事件：{events}"
+    assert SSEEvent.ANSWERABILITY.value in events, f"缺少 answerability 事件：{events}"
     assert SSEEvent.REFERENCES.value in events, f"缺少 references 事件：{events}"
     assert SSEEvent.ANSWER_DELTA.value in events, f"缺少 answer_delta 事件：{events}"
     assert SSEEvent.DONE.value in events, f"缺少 done 事件：{events}"
@@ -274,6 +289,44 @@ def test_rag_branch_sse_sequence(monkeypatch):
     full = "".join(deltas)
     assert full, "拼接后的答案不应为空"
     assert "13%" in full or "税率" in full, f"答案内容不符合假摘要预期：{full!r}"
+
+
+# --------------------------------------------------------------------------- #
+# 用例一·补：RAG 分支"不可答"门控回归（重排分过低 -> 诚实兜底，不喂弱证据给 LLM）
+# --------------------------------------------------------------------------- #
+def test_rag_insufficient_branch_sse_sequence(monkeypatch):
+    """重排 top1 分低于阈值时：astream 应产出 answerability(answerable=False) -> answer_delta(诚实兜底)
+    -> done，且【不出现 references】（build_context 被门控跳过），不触网/连库。"""
+    pipeline = pytest.importorskip("app.graph.pipeline")
+    nodes = pytest.importorskip("app.graph.nodes")
+    from config.constants import Intent
+
+    _patch_common(monkeypatch, nodes, intent=Intent.GENERAL_QA.value, router=_FakeRouterRAG())
+    # 覆盖重排：打低分，触发"不可答"分支
+    monkeypatch.setattr(nodes, "_get_reranker", lambda: _FakeReRankerLow(), raising=True)
+
+    orch = pipeline.Orchestrator()
+    req = ChatRequest(query="一个几乎无相关资料的冷僻问题", user_id="u1", session_id="s1", top_k=5)
+    msgs = asyncio.run(_collect(orch, req))
+    events = _events(msgs)
+
+    # 1) 门控事件出现且判"不可答"
+    assert SSEEvent.ANSWERABILITY.value in events, f"缺少 answerability 事件：{events}"
+    ans_msg = next(m for m in msgs if m.event == SSEEvent.ANSWERABILITY.value)
+    assert ans_msg.data.get("answerable") is False, f"应判不可答：{ans_msg.data}"
+
+    # 2) 不可答分支跳过 build_context -> 不应出现 references 事件
+    assert SSEEvent.REFERENCES.value not in events, f"不可答分支不应出现 references：{events}"
+
+    # 3) 仍应有逐段 answer_delta（诚实兜底话术经切块产出）且能拼回话术
+    deltas = [m.data.get("text", "") for m in msgs if m.event == SSEEvent.ANSWER_DELTA.value]
+    assert len(deltas) >= 1, f"应产出兜底话术 answer_delta：{deltas}"
+    full = "".join(deltas)
+    assert "抱歉" in full, f"兜底话术不符合预期：{full!r}"
+
+    # 4) 正常收尾、无 error
+    assert events[-1] == SSEEvent.DONE.value, f"最后一个事件应为 done：{events}"
+    assert SSEEvent.ERROR.value not in events, f"不应出现 error：{events}"
 
 
 # --------------------------------------------------------------------------- #

@@ -18,6 +18,9 @@ class GraphState(TypedDict, total=False):
     recalled: list               # list[Document] 召回结果
     ranked: list                 # list[Document] 粗排+精排后
     reranked: list               # list[Document] 重排后
+    answerable: bool             # 可答性门控结论（重排后判定：够不够答）
+    answer_confidence: float     # 可答置信度（取重排 top1 分，[0,1]）
+    answerability: dict          # 门控信号明细（doc_count/top分/阈值/降级标记/依据，供观测与SSE）
     context: str                 # 拼好的上下文
     references: list             # list[dict] 引用
     text2sql_result: Any         # Text2SQLResult
