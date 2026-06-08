@@ -39,7 +39,8 @@ EXAMPLES = [
 
 async def run_one(orch: Orchestrator, query: str, session: str) -> dict:
     """跑一条 query，把 SSE 事件流汇总成结构化结果。"""
-    ev = {"intent": None, "retrieval": [], "refs": 0, "titles": [], "sql": None, "answer": "", "error": None}
+    ev = {"intent": None, "retrieval": [], "answerability": None, "refs": 0, "titles": [],
+          "sql": None, "answer": "", "error": None}
     req = ChatRequest(query=query, user_id="e2e", session_id=session, top_k=5)
     async for msg in orch.astream(req):
         e, d = msg.event, msg.data
@@ -47,6 +48,10 @@ async def run_one(orch: Orchestrator, query: str, session: str) -> dict:
             ev["intent"] = d.get("intent")
         elif e == E.RETRIEVAL.value:
             ev["retrieval"].append("%s=%s" % (d.get("stage"), d.get("count")))
+        elif e == E.ANSWERABILITY.value:
+            ev["answerability"] = "可答=%s 置信=%.4f (%s)" % (
+                d.get("answerable"), d.get("confidence") or 0.0,
+                (d.get("signals") or {}).get("reason", ""))
         elif e == E.REFERENCES.value:
             refs = d.get("references") or []
             ev["refs"] = len(refs)
@@ -71,6 +76,8 @@ async def main() -> None:
             ev = await run_one(orch, q, sess)
             print(" 意图     :", ev["intent"])
             print(" 检索阶段 :", " | ".join(ev["retrieval"]) or "(无, 走text2sql)")
+            if ev["answerability"]:
+                print(" 可答性   :", ev["answerability"])
             print(" 引用     :", ev["refs"], ev["titles"])
             if ev["sql"]:
                 print(" SQL      :", ev["sql"]["sql"])

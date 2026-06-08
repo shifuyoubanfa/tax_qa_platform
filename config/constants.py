@@ -47,6 +47,7 @@ class SSEEvent(str, Enum):
     """SSE流式事件类型（前端按此渲染进度）。"""
     INTENT = "intent"
     RETRIEVAL = "retrieval"
+    ANSWERABILITY = "answerability"   # 可答性门控结论（重排后、生成前的"能不能答"判定）
     REFERENCES = "references"
     SQL = "sql"
     ANSWER_DELTA = "answer_delta"
